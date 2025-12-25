@@ -1,337 +1,264 @@
+#ifndef X11_WRAPPER_H
+#define X11_WRAPPER_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <X11/Xlib.h>
+#include <X11/keysym.h>
 #include <unistd.h>
-#include <array>
-#include <cstddef>
-#include <cstdint>
+#include <stddef.h>
+#include <stdint.h>
+#include <stdbool.h>
 
-#ifndef WRAPPER_H
-#define WRAPPER_H
+// Window Struct
+typedef struct xWindow {
+    Display *display;
+    Window window;
+    int screen;
+    GC gc;
+    int width;
+    int height;
+    int x, y;
+    const char *title;
+    uint32_t fcolor;
+    uint32_t bcolor;
+} xWindow;
 
-struct xWindow
-{
-    Display *display = XOpenDisplay(nullptr);
-    Window window = DefaultScreen(display);
-    int screen = 0;
-	GC gc = DefaultGC(display, screen);
-    int width = 800,
-        height = 600;
-    int x = 100,
-        y = 100;
-    const char *title = "CHANGE NAME BY wWindow window = { .title='TITLE', };";
-    uint32_t fcolor = 0x000000;
-    uint32_t bcolor = 0xFFFFFF;
-};
+// Initialize window struct with default values 
+static inline void xInit(xWindow *w) {
+    w->display = XOpenDisplay(NULL);
+    w->screen = 0;
+    w->window = 0;
+    w->gc = 0;
+    w->width = 800;
+    w->height = 600;
+    w->x = 100;
+    w->y = 100;
+    w->title = "change by win.(title) = ...; <- works for everything else aswell";
+    w->fcolor = 0x000000;
+    w->bcolor = 0xFFFFFF;
+}
 
-/*
- * WINDOW MANAGEMENT
- */
+// Window Management
+static inline bool xCreateWindow(xWindow *w) {
+    if (!w->display) return false;
 
-inline bool xCreateWindow(xWindow &w)
-{
-    w.window = XCreateSimpleWindow(
-        w.display,
-        RootWindow(w.display, w.screen),
-        w.x, w.y,
-        w.width, w.height, 0,
-        BlackPixel(w.display, w.screen),
-        WhitePixel(w.display, w.screen));
+    w->window = XCreateSimpleWindow(
+        w->display,
+        RootWindow(w->display, w->screen),
+        w->x, w->y,
+        w->width, w->height, 0,
+        BlackPixel(w->display, w->screen),
+        WhitePixel(w->display, w->screen)
+    );
 
-    if (!w.window) return false;
+    if (!w->window) return false;
 
-    // Basic setup: title,
-    //              input masks,
-    //              map the window so it becomes visible
+    XStoreName(w->display, w->window, w->title);
+    XSelectInput(w->display, w->window, ExposureMask | KeyPressMask | KeyReleaseMask | StructureNotifyMask);
 
-    XStoreName(w.display, w.window, w.title);
-    XSelectInput(w.display, w.window, ExposureMask | KeyPressMask | KeyReleaseMask | StructureNotifyMask);
-
-    Atom wmDeleteMessage = XInternAtom(w.display, "WM_DELETE_WINDOW", False);
-    XSetWMProtocols(w.display, w.window, &wmDeleteMessage, 1);
-    XMapWindow(w.display, w.window);
-    XFlush(w.display);
+    Atom wmDeleteMessage = XInternAtom(w->display, "WM_DELETE_WINDOW", False);
+    XSetWMProtocols(w->display, w->window, &wmDeleteMessage, 1);
+    XMapWindow(w->display, w->window);
+    XFlush(w->display);
 
     XEvent ev;
-	XWindowEvent(w.display, w.window, ExposureMask, &ev);
+    XWindowEvent(w->display, w->window, ExposureMask, &ev);
+    w->gc = DefaultGC(w->display, w->screen);
 
     return true;
 }
 
-inline void xDestroyWindow(xWindow &w)
-{
-    XDestroyWindow(w.display, w.window);
-    XSync(w.display, False);
-    w.window = 0;
+static inline void xDestroyWindow(xWindow *w) {
+    if (!w->display || !w->window) return;
+    XDestroyWindow(w->display, w->window);
+    XSync(w->display, False);
+    w->window = 0;
 }
 
-/*
- * DRAWING
- */
-
-inline void xDrawPixel(xWindow &w, int x, int y, uint32_t color)
-{
-    XSetForeground(w.display, w.gc, color);
-    XDrawPoint(w.display, w.window, w.gc, x, y);
-    XFlush(w.display);
+// Drawing
+static inline void xDrawPixel(xWindow *w, int x, int y, uint32_t color) {
+    XSetForeground(w->display, w->gc, color);
+    XDrawPoint(w->display, w->window, w->gc, x, y);
+    XFlush(w->display);
 }
 
-inline void xDrawTriangle(xWindow &w, int x1, int y1, int x2, int y2, int x3, int y3, uint32_t color)
-{
-    XSetForeground(w.display, w.gc, color);
+static inline void xDrawTriangle(xWindow *w, int x1, int y1, int x2, int y2, int x3, int y3, uint32_t color) {
+    XSetForeground(w->display, w->gc, color);
     XPoint pts[3] = {
-        { static_cast<short>(x1), static_cast<short>(y1) },
-        { static_cast<short>(x2), static_cast<short>(y2) },
-        { static_cast<short>(x3), static_cast<short>(y3) }
+        { (short)x1, (short)y1 },
+        { (short)x2, (short)y2 },
+        { (short)x3, (short)y3 }
     };
-    XFillPolygon(w.display, w.window, w.gc, pts, 3, Convex, CoordModeOrigin);
-    XFlush(w.display);
+    XFillPolygon(w->display, w->window, w->gc, pts, 3, Convex, CoordModeOrigin);
+    XFlush(w->display);
 }
 
-/*
- * INPUT EVENTS
- */
-
-#include <X11/keysym.h>
-
-enum class xKey : uint16_t
-{
+// Input
+typedef enum xKey {
     Unknown = 0,
 
-    Escape, Space, Enter,
-    Tab, Backspace,
+    Escape, Space, 
+    Enter, Tab, 
+    Backspace,
 
-    Left, Right,
+    Left, Right, 
     Up, Down,
 
-    A, B, C, D, E,
-    F, G, H, I, J,
-    K, L, M, N, O,
-    P, Q, R, S, T,
-    U, V, W, X, Y,
-    Z,
+    A,B,C,D,
+    E,F,G,H,
+    I,J,K,L,
+    M,N,O,P,
+    Q,R,S,T,
+    U,V,W,X,
+    Y,Z,
 
-    Num0, Num1, Num2,
-    Num3, Num4, Num5,
-    Num6, Num7, Num8,
-    Num9,
+    Num0,
+    Num1,Num2,Num3,
+    Num4,Num5,Num6,
+    Num7,Num8,Num9,
 
-    LeftShift, RightShift,
+    LeftShift, RightShift, 
     LeftControl, RightControl,
 
-    LeftAlt, RightAlt,
+    LeftAlt, RightAlt, 
     LeftSuper, RightSuper,
 
     F1, F2,
-    COUNT
-};
+    KEY_COUNT
+} xKey;
 
-constexpr size_t KEY_COUNT = static_cast<size_t>(xKey::COUNT);
+#ifndef __cplusplus
+static bool s_curr[KEY_COUNT] = {0};
+static bool s_prev[KEY_COUNT] = {0};
+#else
+#include <array>
 static std::array<bool, KEY_COUNT> s_curr{};
 static std::array<bool, KEY_COUNT> s_prev{};
+#endif
 
-void xSetKey(xKey key, bool down)
-{
-    auto idx = static_cast<size_t>(key);
-    if (idx < s_curr.size()) s_curr[idx] = down;
+static inline void xSetKey(xKey key, bool down) {
+    size_t idx = (size_t)key;
+    if (idx < KEY_COUNT) s_curr[idx] = down;
 }
 
-bool xPollEvents(Display *display)
-{
-    static Atom wmDeleteMessage = XInternAtom(display, "WM_DELETE_WINDOW", False);
+static inline bool xPollEvents(Display *display) {
+    Atom wmDeleteMessage = XInternAtom(display, "WM_DELETE_WINDOW", False);
     bool shouldClose = false;
 
-    while (XPending(display) > 0)
-    {
+    while (XPending(display) > 0) {
         XEvent event;
         XNextEvent(display, &event);
 
-        switch (event.type)
-        {
+        switch (event.type) {
             case ClientMessage:
                 if ((Atom)event.xclient.data.l[0] == wmDeleteMessage) shouldClose = true;
                 break;
 
             case KeyPress:
-            {
-                KeySym sym = XLookupKeysym(&event.xkey, 0);
-                auto mapKey = [](KeySym s) -> xKey
-				{
-                    switch (s)
-                    {
-                        case XK_Escape: return xKey::Escape;
-                        case XK_space: return xKey::Space;
-                        case XK_Return: return xKey::Enter;
-                        case XK_Tab: return xKey::Tab;
-                        case XK_BackSpace: return xKey::Backspace;
-
-                        case XK_Left: return xKey::Left;
-                        case XK_Right: return xKey::Right;
-                        case XK_Up: return xKey::Up;
-                        case XK_Down: return xKey::Down;
-
-                        case XK_a: case XK_A: return xKey::A;
-                        case XK_b: case XK_B: return xKey::B;
-                        case XK_c: case XK_C: return xKey::C;
-                        case XK_d: case XK_D: return xKey::D;
-                        case XK_e: case XK_E: return xKey::E;
-                        case XK_f: case XK_F: return xKey::F;
-                        case XK_g: case XK_G: return xKey::G;
-                        case XK_h: case XK_H: return xKey::H;
-                        case XK_i: case XK_I: return xKey::I;
-                        case XK_j: case XK_J: return xKey::J;
-                        case XK_k: case XK_K: return xKey::K;
-                        case XK_l: case XK_L: return xKey::L;
-                        case XK_m: case XK_M: return xKey::M;
-                        case XK_n: case XK_N: return xKey::N;
-                        case XK_o: case XK_O: return xKey::O;
-                        case XK_p: case XK_P: return xKey::P;
-                        case XK_q: case XK_Q: return xKey::Q;
-                        case XK_r: case XK_R: return xKey::R;
-                        case XK_s: case XK_S: return xKey::S;
-                        case XK_t: case XK_T: return xKey::T;
-                        case XK_u: case XK_U: return xKey::U;
-                        case XK_v: case XK_V: return xKey::V;
-                        case XK_w: case XK_W: return xKey::W;
-                        case XK_x: case XK_X: return xKey::X;
-                        case XK_y: case XK_Y: return xKey::Y;
-                        case XK_z: case XK_Z: return xKey::Z;
-
-                        case XK_0: return xKey::Num0;
-                        case XK_1: return xKey::Num1;
-                        case XK_2: return xKey::Num2;
-                        case XK_3: return xKey::Num3;
-                        case XK_4: return xKey::Num4;
-                        case XK_5: return xKey::Num5;
-                        case XK_6: return xKey::Num6;
-                        case XK_7: return xKey::Num7;
-                        case XK_8: return xKey::Num8;
-                        case XK_9: return xKey::Num9;
-
-                        case XK_Shift_L: return xKey::LeftShift;
-                        case XK_Shift_R: return xKey::RightShift;
-                        case XK_Control_L: return xKey::LeftControl;
-                        case XK_Control_R: return xKey::RightControl;
-                        case XK_Alt_L: return xKey::LeftAlt;
-                        case XK_Alt_R: return xKey::RightAlt;
-                        case XK_Super_L: return xKey::LeftSuper;
-                        case XK_Super_R: return xKey::RightSuper;
-
-                        case XK_F1: return xKey::F1;
-                        case XK_F2: return xKey::F2;
-
-                        default: return xKey::Unknown;
-                    }
-                };
-
-                xKey k = mapKey(sym);
-                if (k != xKey::Unknown) xSetKey(k, true);
-                break;
-            }
-
             case KeyRelease:
             {
+                bool down = (event.type == KeyPress);
                 KeySym sym = XLookupKeysym(&event.xkey, 0);
-                auto mapKey = [](KeySym s) -> xKey
-				{
-                    switch (s)
-                    {
-                        case XK_Escape: return xKey::Escape;
-                        case XK_space: return xKey::Space;
-                        case XK_Return: return xKey::Enter;
-                        case XK_Tab: return xKey::Tab;
-                        case XK_BackSpace: return xKey::Backspace;
+                xKey k = Unknown;
 
-                        case XK_Left: return xKey::Left;
-                        case XK_Right: return xKey::Right;
-                        case XK_Up: return xKey::Up;
-                        case XK_Down: return xKey::Down;
+                switch (sym) {
+                    case XK_Escape: k = Escape; break;
+                    case XK_space: k = Space; break;
+                    case XK_Return: k = Enter; break;
+                    case XK_Tab: k = Tab; break;
+                    case XK_BackSpace: k = Backspace; break;
+                    case XK_Left: k = Left; break;
+                    case XK_Right: k = Right; break;
+                    case XK_Up: k = Up; break;
+                    case XK_Down: k = Down; break;
+                    case XK_a: case XK_A: k = A; break;
+                    case XK_b: case XK_B: k = B; break;
+                    case XK_c: case XK_C: k = C; break;
+                    case XK_d: case XK_D: k = D; break;
+                    case XK_e: case XK_E: k = E; break;
+                    case XK_f: case XK_F: k = F; break;
+                    case XK_g: case XK_G: k = G; break;
+                    case XK_h: case XK_H: k = H; break;
+                    case XK_i: case XK_I: k = I; break;
+                    case XK_j: case XK_J: k = J; break;
+                    case XK_k: case XK_K: k = K; break;
+                    case XK_l: case XK_L: k = L; break;
+                    case XK_m: case XK_M: k = M; break;
+                    case XK_n: case XK_N: k = N; break;
+                    case XK_o: case XK_O: k = O; break;
+                    case XK_p: case XK_P: k = P; break;
+                    case XK_q: case XK_Q: k = Q; break;
+                    case XK_r: case XK_R: k = R; break;
+                    case XK_s: case XK_S: k = S; break;
+                    case XK_t: case XK_T: k = T; break;
+                    case XK_u: case XK_U: k = U; break;
+                    case XK_v: case XK_V: k = V; break;
+                    case XK_w: case XK_W: k = W; break;
+                    case XK_x: case XK_X: k = X; break;
+                    case XK_y: case XK_Y: k = Y; break;
+                    case XK_z: case XK_Z: k = Z; break;
+                    case XK_0: k = Num0; break;
+                    case XK_1: k = Num1; break;
+                    case XK_2: k = Num2; break;
+                    case XK_3: k = Num3; break;
+                    case XK_4: k = Num4; break;
+                    case XK_5: k = Num5; break;
+                    case XK_6: k = Num6; break;
+                    case XK_7: k = Num7; break;
+                    case XK_8: k = Num8; break;
+                    case XK_9: k = Num9; break;
+                    case XK_Shift_L: k = LeftShift; break;
+                    case XK_Shift_R: k = RightShift; break;
+                    case XK_Control_L: k = LeftControl; break;
+                    case XK_Control_R: k = RightControl; break;
+                    case XK_Alt_L: k = LeftAlt; break;
+                    case XK_Alt_R: k = RightAlt; break;
+                    case XK_Super_L: k = LeftSuper; break;
+                    case XK_Super_R: k = RightSuper; break;
+                    case XK_F1: k = F1; break;
+                    case XK_F2: k = F2; break;
+                    default: k = Unknown; break;
+                }
 
-                        case XK_a: case XK_A: return xKey::A;
-                        case XK_b: case XK_B: return xKey::B;
-                        case XK_c: case XK_C: return xKey::C;
-                        case XK_d: case XK_D: return xKey::D;
-                        case XK_e: case XK_E: return xKey::E;
-                        case XK_f: case XK_F: return xKey::F;
-                        case XK_g: case XK_G: return xKey::G;
-                        case XK_h: case XK_H: return xKey::H;
-                        case XK_i: case XK_I: return xKey::I;
-                        case XK_j: case XK_J: return xKey::J;
-                        case XK_k: case XK_K: return xKey::K;
-                        case XK_l: case XK_L: return xKey::L;
-                        case XK_m: case XK_M: return xKey::M;
-                        case XK_n: case XK_N: return xKey::N;
-                        case XK_o: case XK_O: return xKey::O;
-                        case XK_p: case XK_P: return xKey::P;
-                        case XK_q: case XK_Q: return xKey::Q;
-                        case XK_r: case XK_R: return xKey::R;
-                        case XK_s: case XK_S: return xKey::S;
-                        case XK_t: case XK_T: return xKey::T;
-                        case XK_u: case XK_U: return xKey::U;
-                        case XK_v: case XK_V: return xKey::V;
-                        case XK_w: case XK_W: return xKey::W;
-                        case XK_x: case XK_X: return xKey::X;
-                        case XK_y: case XK_Y: return xKey::Y;
-                        case XK_z: case XK_Z: return xKey::Z;
-
-                        case XK_0: return xKey::Num0;
-                        case XK_1: return xKey::Num1;
-                        case XK_2: return xKey::Num2;
-                        case XK_3: return xKey::Num3;
-                        case XK_4: return xKey::Num4;
-                        case XK_5: return xKey::Num5;
-                        case XK_6: return xKey::Num6;
-                        case XK_7: return xKey::Num7;
-                        case XK_8: return xKey::Num8;
-                        case XK_9: return xKey::Num9;
-
-                        case XK_Shift_L: return xKey::LeftShift;
-                        case XK_Shift_R: return xKey::RightShift;
-                        case XK_Control_L: return xKey::LeftControl;
-                        case XK_Control_R: return xKey::RightControl;
-                        case XK_Alt_L: return xKey::LeftAlt;
-                        case XK_Alt_R: return xKey::RightAlt;
-                        case XK_Super_L: return xKey::LeftSuper;
-                        case XK_Super_R: return xKey::RightSuper;
-
-                        case XK_F1: return xKey::F1;
-                        case XK_F2: return xKey::F2;
-
-                        default: return xKey::Unknown;
-                    }
-                };
-
-                xKey k = mapKey(sym);
-                if (k != xKey::Unknown) xSetKey(k, false);
+                if (k != Unknown) xSetKey(k, down);
                 break;
             }
 
-            default:
-                break;
+            default: break;
         }
     }
     return shouldClose;
 }
 
-bool xIsKeyDown(xKey key)
-{
-    auto idx = static_cast<size_t>(key);
-    return idx < s_curr.size() ? s_curr[idx] : false;
+static inline bool xIsKeyDown(xKey key) {
+    size_t idx = (size_t)key;
+    return (idx < KEY_COUNT) ? s_curr[idx] : false;
 }
 
-bool xIsKeyPressed(xKey key)
-{
-    auto idx = static_cast<size_t>(key);
-    return idx < s_curr.size() ? (s_curr[idx] && !s_prev[idx]) : false;
+static inline bool xIsKeyPressed(xKey key) {
+    size_t idx = (size_t)key;
+    return (idx < KEY_COUNT) ? (s_curr[idx] && !s_prev[idx]) : false;
 }
 
-bool xIsKeyReleased(xKey key)
-{
-    auto idx = static_cast<size_t>(key);
-    return idx < s_curr.size() ? (!s_curr[idx] && s_prev[idx]) : false;
+static inline bool xIsKeyReleased(xKey key) {
+    size_t idx = (size_t)key;
+    return (idx < KEY_COUNT) ? (!s_curr[idx] && s_prev[idx]) : false;
 }
 
-// Call once per frame after processing events
-inline void xUpdateInput()
-{
+static inline void xUpdateInput(void) {
+#ifndef __cplusplus
+    for (size_t i = 0; i < KEY_COUNT; ++i) s_prev[i] = s_curr[i];
+#else
     s_prev = s_curr;
+#endif
 }
-#endif // WRAPPER_H
+
+#ifdef __cplusplus
+} // extern "C"
+#endif
+
+#endif // X11_WRAPPER_H
+

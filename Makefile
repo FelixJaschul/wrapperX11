@@ -1,17 +1,21 @@
-run:
-	g++ -std=c++17 -I/opt/X11/include -L/opt/X11/lib -o app main.cpp -lX11
-	./app
+all: clean build run
 
 clean:
-	rm -rf app
+	rm -rf main
 	rm -rf .idea
 
+build:
+	gcc -I/opt/X11/include -L/opt/X11/lib -o main main.c -lX11
+	
+run:
+	./main
+
 n: clean
-	nvim
+	nvim main.c
 
 # GIT HELPER
 
-MESSAGE=.
+MESSAGE = .
 
 push: clean add commit
 	git push

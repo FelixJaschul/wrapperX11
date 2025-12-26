@@ -20,19 +20,7 @@ int main()
         if (xPollEvents(win.display)) break;
         if (xIsKeyPressed(Escape)) break;
 
-        xDrawRectangle(&win, 100, 100, 300, 300, 0x882020);
-
-        xDrawTriangle(&win,
-            0, 0,
-            win.width, 0,
-            0, win.height,
-            c[ccc]);
-
-        xDrawTriangle(&win,
-            win.width, win.height,
-            0, win.height,
-            win.width, 0,
-            c[ccc]);
+        xDrawRectangle(&win, 0, 0, win.width, win.height, c[ccc]);
 
         ccc = (ccc + 1) % cc;
         xUpdateInput(); usleep(3000*XFPS);

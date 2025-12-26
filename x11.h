@@ -102,19 +102,12 @@ static inline void xDrawTriangle(xWindow *w, int x1, int y1, int x2, int y2, int
     XFlush(w->display);
 }
 
-static inline void xDrawRectangle(xWindow *w, int x1, int y1, int width, it height, uint32_t color) 
+static inline void xDrawRectangle(xWindow *w, int x1, int y1, int width, int height, uint32_t color) 
 {
-    xDrawTriangle(&win,
-        x1, y1,
-        width, 0,
-        0, height,
-        color);
-
-    xDrawTriangle(&win,
-        width, height,
-        0, y1,
-        x1, 0,
-        color);
+    int x2 = x1 + width;
+    int y2 = y1 + height;
+    xDrawTriangle(w, x1, y1, x2, y1, x1, y2, color);
+    xDrawTriangle(w, x2, y1, x2, y2, x1, y2, color);
 }
 
 // Input

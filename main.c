@@ -20,6 +20,8 @@ int main()
         if (xPollEvents(win.display)) break;
         if (xIsKeyPressed(Escape)) break;
 
+        xDrawRectangle(&win, 100, 100, 300, 300, 0x882020);
+
         xDrawTriangle(&win,
             0, 0,
             win.width, 0,

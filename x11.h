@@ -13,7 +13,8 @@ extern "C" {
 #include <stdbool.h>
 
 // Window Struct
-typedef struct xWindow {
+typedef struct xWindow 
+{
     Display *display;
     Window window;
     int screen;
@@ -27,7 +28,8 @@ typedef struct xWindow {
 } xWindow;
 
 // Initialize window struct with default values 
-static inline void xInit(xWindow *w) {
+static inline void xInit(xWindow *w) 
+{
     w->display = XOpenDisplay(NULL);
     w->screen = 0;
     w->window = 0;
@@ -42,7 +44,8 @@ static inline void xInit(xWindow *w) {
 }
 
 // Window Management
-static inline bool xCreateWindow(xWindow *w) {
+static inline bool xCreateWindow(xWindow *w) 
+{
     if (!w->display) return false;
 
     w->window = XCreateSimpleWindow(
@@ -71,7 +74,8 @@ static inline bool xCreateWindow(xWindow *w) {
     return true;
 }
 
-static inline void xDestroyWindow(xWindow *w) {
+static inline void xDestroyWindow(xWindow *w) 
+{
     if (!w->display || !w->window) return;
     XDestroyWindow(w->display, w->window);
     XSync(w->display, False);
@@ -79,13 +83,15 @@ static inline void xDestroyWindow(xWindow *w) {
 }
 
 // Drawing
-static inline void xDrawPixel(xWindow *w, int x, int y, uint32_t color) {
+static inline void xDrawPixel(xWindow *w, int x, int y, uint32_t color) 
+{
     XSetForeground(w->display, w->gc, color);
     XDrawPoint(w->display, w->window, w->gc, x, y);
     XFlush(w->display);
 }
 
-static inline void xDrawTriangle(xWindow *w, int x1, int y1, int x2, int y2, int x3, int y3, uint32_t color) {
+static inline void xDrawTriangle(xWindow *w, int x1, int y1, int x2, int y2, int x3, int y3, uint32_t color) 
+{
     XSetForeground(w->display, w->gc, color);
     XPoint pts[3] = {
         { (short)x1, (short)y1 },
@@ -96,8 +102,24 @@ static inline void xDrawTriangle(xWindow *w, int x1, int y1, int x2, int y2, int
     XFlush(w->display);
 }
 
+static inline void xDrawRectangle(xWindow *w, int x1, int y1, int width, it height, uint32_t color) 
+{
+    xDrawTriangle(&win,
+        x1, y1,
+        width, 0,
+        0, height,
+        color);
+
+    xDrawTriangle(&win,
+        width, height,
+        0, y1,
+        x1, 0,
+        color);
+}
+
 // Input
-typedef enum xKey {
+typedef enum xKey 
+{
     Unknown = 0,
 
     Escape, Space, 
@@ -139,20 +161,24 @@ static std::array<bool, KEY_COUNT> s_curr{};
 static std::array<bool, KEY_COUNT> s_prev{};
 #endif
 
-static inline void xSetKey(xKey key, bool down) {
+static inline void xSetKey(xKey key, bool down) 
+{
     size_t idx = (size_t)key;
     if (idx < KEY_COUNT) s_curr[idx] = down;
 }
 
-static inline bool xPollEvents(Display *display) {
+static inline bool xPollEvents(Display *display) 
+{
     Atom wmDeleteMessage = XInternAtom(display, "WM_DELETE_WINDOW", False);
     bool shouldClose = false;
 
-    while (XPending(display) > 0) {
+    while (XPending(display) > 0) 
+    {
         XEvent event;
         XNextEvent(display, &event);
 
-        switch (event.type) {
+        switch (event.type) 
+        {
             case ClientMessage:
                 if ((Atom)event.xclient.data.l[0] == wmDeleteMessage) shouldClose = true;
                 break;
@@ -164,7 +190,8 @@ static inline bool xPollEvents(Display *display) {
                 KeySym sym = XLookupKeysym(&event.xkey, 0);
                 xKey k = Unknown;
 
-                switch (sym) {
+                switch (sym) 
+                {
                     case XK_Escape: k = Escape; break;
                     case XK_space: k = Space; break;
                     case XK_Return: k = Enter; break;
@@ -233,22 +260,26 @@ static inline bool xPollEvents(Display *display) {
     return shouldClose;
 }
 
-static inline bool xIsKeyDown(xKey key) {
+static inline bool xIsKeyDown(xKey key) 
+{
     size_t idx = (size_t)key;
     return (idx < KEY_COUNT) ? s_curr[idx] : false;
 }
 
-static inline bool xIsKeyPressed(xKey key) {
+static inline bool xIsKeyPressed(xKey key) 
+{
     size_t idx = (size_t)key;
     return (idx < KEY_COUNT) ? (s_curr[idx] && !s_prev[idx]) : false;
 }
 
-static inline bool xIsKeyReleased(xKey key) {
+static inline bool xIsKeyReleased(xKey key) 
+{
     size_t idx = (size_t)key;
     return (idx < KEY_COUNT) ? (!s_curr[idx] && s_prev[idx]) : false;
 }
 
-static inline void xUpdateInput(void) {
+static inline void xUpdateInput(void) 
+{
 #ifndef __cplusplus
     for (size_t i = 0; i < KEY_COUNT; ++i) s_prev[i] = s_curr[i];
 #else

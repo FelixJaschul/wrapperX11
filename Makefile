@@ -5,7 +5,7 @@ clean:
 	rm -rf .idea
 
 build:
-	gcc -I/opt/X11/include -L/opt/X11/lib -o main main.c -lX11
+	gcc -O3 -I/opt/X11/include -Xpreprocessor -fopenmp -L/opt/X11/lib -L/opt/homebrew/Cellar/llvm/21.1.8/lib -o main main.c -lX11 -lm -lomp
 	
 run:
 	./main

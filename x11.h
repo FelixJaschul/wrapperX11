@@ -1,16 +1,16 @@
 #ifndef X11_WRAPPER_H
 #define X11_WRAPPER_H
 
+#include <stdint.h>
+#include <stdbool.h>
+#include <stddef.h>
+#include <X11/Xlib.h>
+#include <X11/Xutil.h>
+#include <X11/keysym.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#include <X11/Xlib.h>
-#include <X11/keysym.h>
-#include <unistd.h>
-#include <stddef.h>
-#include <stdint.h>
-#include <stdbool.h>
 
 // Window Struct
 typedef struct xWindow 
@@ -25,9 +25,12 @@ typedef struct xWindow
     const char *title;
     uint32_t fcolor;
     uint32_t bcolor;
+
+    XImage *image;
+    uint32_t *buffer;
 } xWindow;
 
-// Initialize window struct with default values 
+// Initialize the window struct with default values
 static inline void xInit(xWindow *w) 
 {
     w->display = XOpenDisplay(NULL);
@@ -41,6 +44,8 @@ static inline void xInit(xWindow *w)
     w->title = "change by win.(title) = ...; <- works for everything else aswell";
     w->fcolor = 0x000000;
     w->bcolor = 0xFFFFFF;
+    w->image = NULL;
+    w->buffer = NULL;
 }
 
 // Window Management
@@ -71,26 +76,52 @@ static inline bool xCreateWindow(xWindow *w)
     XWindowEvent(w->display, w->window, ExposureMask, &ev);
     w->gc = DefaultGC(w->display, w->screen);
 
+    // Create Framebuffer
+    w->buffer = (uint32_t *)malloc(w->width * w->height * sizeof(uint32_t));
+    w->image = XCreateImage(
+        w->display,
+        DefaultVisual(w->display, w->screen),
+        DefaultDepth(w->display, w->screen),
+        ZPixmap, 0, (char *)w->buffer,
+        w->width, w->height, 32, 0
+    );
+
     return true;
 }
 
 static inline void xDestroyWindow(xWindow *w) 
 {
     if (!w->display || !w->window) return;
+    if (w->image) XDestroyImage(w->image); // This also frees w->buffer
     XDestroyWindow(w->display, w->window);
     XSync(w->display, False);
     w->window = 0;
 }
 
 // Drawing
-static inline void xDrawPixel(xWindow *w, int x, int y, uint32_t color) 
+static inline void xDrawPixel(const xWindow *w, const int x, const int y, const uint32_t color)
 {
-    XSetForeground(w->display, w->gc, color);
-    XDrawPoint(w->display, w->window, w->gc, x, y);
+    if (x >= 0 && x < w->width && y >= 0 && y < w->height)
+    {
+        w->buffer[y * w->width + x] = color;
+    }
+}
+
+static inline void xUpdateFramebuffer(const xWindow *w)
+{
+    XPutImage(w->display, w->window, w->gc, w->image, 0, 0, 0, 0, w->width, w->height);
     XFlush(w->display);
 }
 
-static inline void xDrawTriangle(xWindow *w, int x1, int y1, int x2, int y2, int x3, int y3, uint32_t color) 
+static inline void xDrawTriangle(
+    const xWindow *w,
+    const int x1,
+    const int y1,
+    const int x2,
+    const int y2,
+    const int x3,
+    const int y3,
+    const uint32_t color)
 {
     XSetForeground(w->display, w->gc, color);
     XPoint pts[3] = {
@@ -102,10 +133,16 @@ static inline void xDrawTriangle(xWindow *w, int x1, int y1, int x2, int y2, int
     XFlush(w->display);
 }
 
-static inline void xDrawRectangle(xWindow *w, int x1, int y1, int width, int height, uint32_t color) 
+static inline void xDrawRectangle(
+    const xWindow *w,
+    const int x1,
+    const int y1,
+    const int width,
+    const int height,
+    const uint32_t color)
 {
-    int x2 = x1 + width;
-    int y2 = y1 + height;
+    const int x2 = x1 + width;
+    const int y2 = y1 + height;
     xDrawTriangle(w, x1, y1, x2, y1, x1, y2, color);
     xDrawTriangle(w, x2, y1, x2, y2, x1, y2, color);
 }
@@ -154,15 +191,18 @@ static std::array<bool, KEY_COUNT> s_curr{};
 static std::array<bool, KEY_COUNT> s_prev{};
 #endif
 
-static inline void xSetKey(xKey key, bool down) 
+static inline void xSetKey(
+    const xKey key,
+    const bool down)
 {
-    size_t idx = (size_t)key;
+    const size_t idx = (size_t)key;
     if (idx < KEY_COUNT) s_curr[idx] = down;
 }
 
-static inline bool xPollEvents(Display *display) 
+static inline bool xPollEvents(
+    Display *display)
 {
-    Atom wmDeleteMessage = XInternAtom(display, "WM_DELETE_WINDOW", False);
+    const Atom wmDeleteMessage = XInternAtom(display, "WM_DELETE_WINDOW", False);
     bool shouldClose = false;
 
     while (XPending(display) > 0) 
@@ -253,21 +293,24 @@ static inline bool xPollEvents(Display *display)
     return shouldClose;
 }
 
-static inline bool xIsKeyDown(xKey key) 
+static inline bool xIsKeyDown(
+    const xKey key)
 {
-    size_t idx = (size_t)key;
+    const size_t idx = (size_t)key;
     return (idx < KEY_COUNT) ? s_curr[idx] : false;
 }
 
-static inline bool xIsKeyPressed(xKey key) 
+static inline bool xIsKeyPressed(
+    const xKey key)
 {
-    size_t idx = (size_t)key;
+    const size_t idx = (size_t)key;
     return (idx < KEY_COUNT) ? (s_curr[idx] && !s_prev[idx]) : false;
 }
 
-static inline bool xIsKeyReleased(xKey key) 
+static inline bool xIsKeyReleased(
+    const xKey key)
 {
-    size_t idx = (size_t)key;
+    size_t const idx = (size_t)key;
     return (idx < KEY_COUNT) ? (!s_curr[idx] && s_prev[idx]) : false;
 }
 

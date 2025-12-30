@@ -47,6 +47,15 @@ typedef struct {
     xMaterial mat;
 } xRect;
 
+typedef struct {
+    xRect *rects;
+    int rect_count;
+    int rect_max;
+    xSphere *spheres;
+    int sphere_count;
+    int sphere_max;
+} xScene;
+
 // Camera functions
 void xCameraInit(xCamera *cam);
 void xCameraUpdate(xCamera *cam);

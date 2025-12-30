@@ -51,7 +51,7 @@ inline Vec3 sub(const Vec3 a, const Vec3 b)
     };
 }
 
-inline Vec3 mul(Vec3 v, const float t)
+inline Vec3 mul(const Vec3 v, const float t)
 {
     return (Vec3) {
         v.x * t,

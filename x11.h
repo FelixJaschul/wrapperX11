@@ -44,13 +44,13 @@ void   xDrawPixel(const xWindow *w, int x, int y, uint32_t color);
 #endif
 
 #ifdef XKEYS_IMPLEMENTATION
-#include <xKeys.h>
+#include "xKeys.h"
 #endif // XKEYS_IMPLEMENTATION
 #ifdef XMATH_IMPLEMENTATION
-#include <xMath.h>
+#include "xMath.h"
 #endif // XMATH_IMPLEMENTATION
 #ifdef XUTIL_IMPLEMENTATION
-#include <xUtil.h>
+#include "xUtil.h"
 #endif // XUTIL_IMPLEMENTATION
 
 inline void xWindowInit(xWindow *w)

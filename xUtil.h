@@ -68,8 +68,8 @@ void xCameraMove(xCamera *cam, Vec3 direction, float speed);
 // Rotate camera by delta angles in degrees
 void xCameraRotate(xCamera *cam, float dyaw, float dpitch);
 
-// Generate ray from camera for given UV coordinates
-Ray xCameraGetRay(const xCamera *cam, float u, float v, float aspect_ratio);
+// Generate ray from camera with pre-scaled viewport offsets
+Ray xCameraGetRay(const xCamera* cam, float u_scaled, float v_scaled);
 
 // Create new model in storage array (returns NULL if array is full)
 xModel* xModelCreate(xModel* storage, int* count, int max, Vec3 color, float refl);
@@ -134,11 +134,8 @@ inline void xCameraRotate(xCamera *cam, const float dyaw, const float dpitch)
     xCameraUpdate(cam);
 }
 
-inline Ray xCameraGetRay(const xCamera *cam, const float u, const float v, const float aspect_ratio)
-{
-    const float viewport_height = 2.0f;
-    const float viewport_width = aspect_ratio * viewport_height;
-    Vec3 rd = add(cam->front, add(mul(cam->up, v * viewport_height), mul(cam->right, u * viewport_width)));
+inline Ray xCameraGetRay(const xCamera* cam, const float u_scaled, const float v_scaled) {
+    Vec3 rd = add(cam->front, add(mul(cam->up, v_scaled), mul(cam->right, u_scaled)));
     rd = norm(rd);
     return (Ray){cam->position, rd};
 }

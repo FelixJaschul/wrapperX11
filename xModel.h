@@ -7,6 +7,9 @@
 
 #include "xMath.h"
 
+#define INITIAL_VERTEX_CAPACITY 1024
+#define INITIAL_TRIANGLE_CAPACITY 2048
+
 #ifdef __cplusplus
 extern "C" {
 #endif

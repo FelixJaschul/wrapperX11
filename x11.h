@@ -32,24 +32,53 @@ typedef struct xWindow {
 } xWindow;
 
 // Initialize window structure with default values
+/*  -> Example:
+ *  xWindow win;
+ *  xWindowInit(&win);
+ *  win.title = "My Window";
+ *  win.width = 1280;
+ *  win.height = 720;
+ */
 void xWindowInit(xWindow *w);
 
 // Create and display X11 window, returns false on failure
+/*  -> Example:
+ *  if (!xCreateWindow(&win)) return 1;
+ */
 bool xCreateWindow(xWindow *w);
 
 // Cleanup and destroy window resources
+/*  -> Example:
+ *  xDestroyWindow(&win);
+ */
 void xDestroyWindow(xWindow *w);
 
 // Update frame timing (sleeps to maintain target FPS)
+/*  -> Example:
+ *  while(1) {
+ *      ...
+ *      xUpdateFrame(&win);
+ *  }
+ */
 void xUpdateFrame(xWindow *w);
 
 // Push pixel buffer to screen
+/*  -> Example:
+ *  // After drawing to win.buffer
+ *  xUpdateFramebuffer(&win);
+ */
 void xUpdateFramebuffer(const xWindow *w);
 
 // Get current FPS based on actual frame time
+/*  -> Example:
+ *  printf("FPS: %.2f\n", xGetFPS(&win));
+ */
 double xGetFPS(const xWindow *w);
 
 // Draw single pixel at (x,y) with bounds checking
+/*  -> Example:
+ *  xDrawPixel(&win, 100, 100, 0xFF0000); // Draw red pixel
+ */
 void xDrawPixel(const xWindow *w, int x, int y, uint32_t color);
 
 #ifdef __cplusplus

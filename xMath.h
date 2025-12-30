@@ -14,16 +14,59 @@ typedef struct {
     Vec3 origin, direction; 
 } Ray;
 
+/*  -> Example:
+ *  Vec3 v = vec3(1.0f, 2.0f, 3.0f);
+ */
 Vec3  vec3(float x, float y, float z);
+
+/*  -> Example:
+ *  Vec3 c = add(a, b);
+ */
 Vec3  add(Vec3 a, Vec3 b);
+
+/*  -> Example:
+ *  Vec3 c = sub(a, b);
+ */
 Vec3  sub(Vec3 a, Vec3 b);
+
+/*  -> Example:
+ *  Vec3 v = mul(a, 2.0f);
+ */
 Vec3  mul(Vec3 v, float t);
+
+/*  -> Example:
+ *  Vec3 c = vmul(a, b);
+ */
 Vec3  vmul(Vec3 a, Vec3 b);
+
+/*  -> Example:
+ *  Vec3 v = vdiv(a, 2.0f);
+ */
 Vec3  vdiv(Vec3 v, float t);
+
+/*  -> Example:
+ *  float d = dot(a, b);
+ */
 float dot(Vec3 a, Vec3 b);
+
+/*  -> Example:
+ *  Vec3 n = cross(a, b);
+ */
 Vec3  cross(Vec3 a, Vec3 b);
+
+/*  -> Example:
+ *  float length = len(v);
+ */
 float len(Vec3 v);
+
+/*  -> Example:
+ *  Vec3 unit = norm(v);
+ */
 Vec3  norm(Vec3 v);
+
+/*  -> Example:
+ *  Vec3 reflected = reflect(incident, normal);
+ */
 Vec3  reflect(Vec3 v, Vec3 n);
 
 #ifdef XMATH_IMPLEMENTATION

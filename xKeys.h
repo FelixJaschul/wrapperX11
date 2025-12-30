@@ -69,24 +69,49 @@ typedef struct xInputState {
 } xInputState;
 
 // Initialize input state to zero
+/*  -> Example:
+ *  xInputState input;
+ *  xInputInit(&input);
+ */
 void xInputInit(xInputState *state);
 
 // Poll X11 events and update input state, returns true if window should close
+/*  -> Example:
+ *  if (xPollEvents(win.display, &input)) break;
+ */
 bool xPollEvents(Display *display, xInputState *state);
 
 // Copy current frame state to previous (call once per frame after processing)
+/*  -> Example:
+ *  while(1) {
+ *      ...
+ *      xUpdateInput(&input);
+ *  }
+ */
 void xUpdateInput(xInputState *state);
 
 // Check if key is currently held down
+/*  -> Example:
+ *  if (xIsKeyDown(&input, KEY_W)) // Move forward
+ */
 bool xIsKeyDown(const xInputState *state, Key key);
 
 // Check if key was just pressed this frame
+/*  -> Example:
+ *  if (xIsKeyPressed(&input, KEY_SPACE)) // Jump
+ */
 bool xIsKeyPressed(const xInputState *state, Key key);
 
 // Check if key was just released this frame
+/*  -> Example:
+ *  if (xIsKeyReleased(&input, KEY_E)) // Use item
+ */
 bool xIsKeyReleased(const xInputState *state, Key key);
 
 // Check if mouse button is currently held down
+/*  -> Example:
+ *  if (xIsMouseDown(&input, MOUSE_LEFT)) // Shoot
+ */
 bool xIsMouseDown(const xInputState *state, MouseButton btn);
 
 // Check if mouse button was just pressed this frame
@@ -96,15 +121,29 @@ bool xIsMousePressed(const xInputState *state, MouseButton btn);
 bool xIsMouseReleased(const xInputState *state, MouseButton btn);
 
 // Get current mouse position in window coordinates
+/*  -> Example:
+ *  int mx, my;
+ *  xGetMousePosition(&input, &mx, &my);
+ */
 void xGetMousePosition(const xInputState *state, int *x, int *y);
 
 // Get mouse delta since last frame (for FPS camera controls)
+/*  -> Example:
+ *  int dx, dy;
+ *  xGetMouseDelta(&input, &dx, &dy);
+ */
 void xGetMouseDelta(const xInputState *state, int *dx, int *dy);
 
 // Grab mouse cursor (hides and locks to window center)
+/*  -> Example:
+ *  xGrabMouse(win.display, win.window, win.width, win.height, &input);
+ */
 void xGrabMouse(Display *display, Window window, int width, int height, xInputState *state);
 
 // Release grabbed mouse cursor
+/*  -> Example:
+ *  xReleaseMouse(win.display, win.window, &input);
+ */
 void xReleaseMouse(Display *display, Window window, xInputState *state);
 
 // Check if mouse is currently grabbed

@@ -57,20 +57,34 @@ typedef struct {
 } xModel;
 
 // Initialize camera with default position and orientation
+/*  -> Example:
+ *  xCamera camera;
+ *  xCameraInit(&camera);
+ *  camera.position = vec3(0.0f, 1.0f, 5.0f);
+ */
 void xCameraInit(xCamera *cam);
 
 // Update camera vectors based on yaw/pitch (automatically clamps pitch)
+/*  -> Example:
+ *  camera.yaw += 10.0f;
+ *  xCameraUpdate(&camera);
+ */
 void xCameraUpdate(xCamera *cam);
 
 // Move camera in given direction by speed amount
+/*  -> Example:
+ *  if (xIsKeyDown(&input, KEY_W)) xCameraMove(&camera, camera.front, 0.1f);
+ */
 void xCameraMove(xCamera *cam, Vec3 direction, float speed);
 
 // Rotate camera by delta angles in degrees
+/*  -> Example:
+ *  xCameraRotate(&camera, mouse_dx * sensitivity, -mouse_dy * sensitivity);
+ */
 void xCameraRotate(xCamera *cam, float dyaw, float dpitch);
 
 // Generate ray from camera with pre-scaled viewport offsets
-/*  -> Example Implementaion of xCameraGetRay:
- *  -> Outside of game loop
+/*  -> Example:
  *  float* u_offsets = (float*)malloc(win.width * sizeof(float));
     float* v_offsets = (float*)malloc(win.height * sizeof(float));
     assert(u_offsets && v_offsets && "Failed to allocate viewport offset buffers");
@@ -78,30 +92,47 @@ void xCameraRotate(xCamera *cam, float dyaw, float dpitch);
     for (int x = 0; x < win.width; x++)  u_offsets[x] = ((float)x / (float)(win.width - 1) - 0.5f) * viewport_width;
     for (int y = 0; y < win.height; y++) v_offsets[y] = ((float)(win.height - 1 - y) / (float)(win.height - 1) - 0.5f) * viewport_height;
 
- *  -> Inside game loop:
- *  #pragma omp parallel for schedule(dynamic) default(none) shared(win, camera, u_offsets, v_offsets)
-    for (int y = 0; y < win.height; y++) {
-        for (int x = 0; x < win.width; x++) {
-            const Ray ray = xCameraGetRay(&camera, u_offsets[x], v_offsets[y]);
-            const Vec3 color = calculate_ray_color(ray, MAX_BOUNCES);
-            win.buffer[y * win.width + x] = uint32(color);
+    while (1) {
+        ...
+        #pragma omp parallel for schedule(dynamic) default(none) shared(win, camera, u_offsets, v_offsets)
+        for (int y = 0; y < win.height; y++) {
+            for (int x = 0; x < win.width; x++) {
+                const Ray ray = xCameraGetRay(&camera, u_offsets[x], v_offsets[y]);
+                const Vec3 color = calculate_ray_color(ray, MAX_BOUNCES);
+                win.buffer[y * win.width + x] = uint32(color);
+        }
     }
 }*/
 Ray xCameraGetRay(const xCamera* cam, float u_scaled, float v_scaled);
 
 // Create new model in storage array (returns NULL if array is full)
+/*  -> Example:
+ *  xModel* cube = xModelCreate(scene_models, &num_models, MAX_MODELS, vec3(1,0,0), 0.5f);
+ */
 xModel* xModelCreate(xModel* storage, int* count, int max, Vec3 color, float refl);
 
 // Load OBJ file into model (dynamically allocates triangles)
+/*  -> Example:
+ *  xModelLoad(cube, "res/cube.obj");
+ */
 void xModelLoad(xModel* m, const char* path);
 
 // Free model triangle data
+/*  -> Example:
+ *  xModelFree(cube);
+ */
 void xModelFree(xModel* m);
 
 // Set model transform (position, rotation in radians, scale)
+/*  -> Example:
+ *  xModelTransform(cube, vec3(0,0,0), vec3(0, M_PI/4, 0), vec3(1,1,1));
+ */
 void xModelTransform(xModel* m, Vec3 pos, Vec3 rot, Vec3 scale);
 
 // Apply transforms to all models in array (call after changing transforms)
+/*  -> Example:
+ *  xModelUpdate(scene_models, num_models);
+ */
 void xModelUpdate(const xModel* models, int count);
 
 #ifdef __cplusplus

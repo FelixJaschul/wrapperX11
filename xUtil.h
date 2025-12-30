@@ -69,6 +69,24 @@ void xCameraMove(xCamera *cam, Vec3 direction, float speed);
 void xCameraRotate(xCamera *cam, float dyaw, float dpitch);
 
 // Generate ray from camera with pre-scaled viewport offsets
+/*  -> Example Implementaion of xCameraGetRay:
+ *  -> Outside of game loop
+ *  float* u_offsets = (float*)malloc(win.width * sizeof(float));
+    float* v_offsets = (float*)malloc(win.height * sizeof(float));
+    assert(u_offsets && v_offsets && "Failed to allocate viewport offset buffers");
+
+    for (int x = 0; x < win.width; x++)  u_offsets[x] = ((float)x / (float)(win.width - 1) - 0.5f) * viewport_width;
+    for (int y = 0; y < win.height; y++) v_offsets[y] = ((float)(win.height - 1 - y) / (float)(win.height - 1) - 0.5f) * viewport_height;
+
+ *  -> Inside game loop:
+ *  #pragma omp parallel for schedule(dynamic) default(none) shared(win, camera, u_offsets, v_offsets)
+    for (int y = 0; y < win.height; y++) {
+        for (int x = 0; x < win.width; x++) {
+            const Ray ray = xCameraGetRay(&camera, u_offsets[x], v_offsets[y]);
+            const Vec3 color = calculate_ray_color(ray, MAX_BOUNCES);
+            win.buffer[y * win.width + x] = uint32(color);
+    }
+}*/
 Ray xCameraGetRay(const xCamera* cam, float u_scaled, float v_scaled);
 
 // Create new model in storage array (returns NULL if array is full)
@@ -134,7 +152,8 @@ inline void xCameraRotate(xCamera *cam, const float dyaw, const float dpitch)
     xCameraUpdate(cam);
 }
 
-inline Ray xCameraGetRay(const xCamera* cam, const float u_scaled, const float v_scaled) {
+inline Ray xCameraGetRay(const xCamera* cam, const float u_scaled, const float v_scaled)
+{
     Vec3 rd = add(cam->front, add(mul(cam->up, v_scaled), mul(cam->right, u_scaled)));
     rd = norm(rd);
     return (Ray){cam->position, rd};

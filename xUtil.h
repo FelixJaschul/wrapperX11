@@ -6,11 +6,16 @@
 
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <assert.h>
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
+
+#define INITIAL_VERTEX_CAPACITY 1024
+#define INITIAL_TRIANGLE_CAPACITY 2048
 
 #ifdef __cplusplus
 extern "C" {
@@ -19,47 +24,67 @@ extern "C" {
 // Camera structure
 typedef struct xCamera {
     Vec3 position;
-    float yaw;   // degrees
-    float pitch; // degrees
-    float fov;
-    Vec3 front;
-    Vec3 right;
-    Vec3 up;
+    float yaw;     // Rotation in degrees
+    float pitch;   // Rotation in degrees
+    float fov;     // Field of view
+    Vec3 front;    // Forward direction vector
+    Vec3 right;    // Right direction vector
+    Vec3 up;       // Up direction vector
 } xCamera;
 
-// Scene object structures
+// Material properties for rendering
 typedef struct {
     Vec3 color;
-    float reflectivity;
-    float specular;
+    float reflectivity;  // 0.0 = matte, 1.0 = mirror
+    float specular;      // Specular highlight strength
 } xMaterial;
 
+// Triangle primitive for meshes
 typedef struct {
     Vec3 v0, v1, v2;
 } xTriangle;
 
+// 3D model with transform and material
 typedef struct {
-    xTriangle* triangles;
-    xTriangle* transformed_triangles;
+    xTriangle* triangles;              // Original mesh triangles
+    xTriangle* transformed_triangles;  // World-space transformed triangles
     int num_triangles;
+    int capacity;                      // Allocated triangle capacity
     Vec3 position;
-    float rot_x, rot_y, rot_z;
+    float rot_x, rot_y, rot_z;        // Euler angles in radians
     Vec3 scale;
     xMaterial mat;
 } xModel;
 
-// Camera functions
+// Initialize camera with default position and orientation
 void xCameraInit(xCamera *cam);
-void xCameraUpdate(xCamera *cam);
-void xCameraMove(xCamera *cam, Vec3 direction, float speed);
-void xCameraRotate(xCamera *cam, float dyaw, float dpitch);
-Ray  xCameraGetRay(const xCamera *cam, float u, float v, float aspect_ratio);
 
-// Model functions
+// Update camera vectors based on yaw/pitch (automatically clamps pitch)
+void xCameraUpdate(xCamera *cam);
+
+// Move camera in given direction by speed amount
+void xCameraMove(xCamera *cam, Vec3 direction, float speed);
+
+// Rotate camera by delta angles in degrees
+void xCameraRotate(xCamera *cam, float dyaw, float dpitch);
+
+// Generate ray from camera for given UV coordinates
+Ray xCameraGetRay(const xCamera *cam, float u, float v, float aspect_ratio);
+
+// Create new model in storage array (returns NULL if array is full)
 xModel* xModelCreate(xModel* storage, int* count, int max, Vec3 color, float refl);
-void    xModelLoad(xModel* m, const char* path);
-void    xModelTransform(xModel* m, Vec3 pos, Vec3 rot, Vec3 scale);
-void    xModelUpdate(const xModel* models, int count);
+
+// Load OBJ file into model (dynamically allocates triangles)
+void xModelLoad(xModel* m, const char* path);
+
+// Free model triangle data
+void xModelFree(xModel* m);
+
+// Set model transform (position, rotation in radians, scale)
+void xModelTransform(xModel* m, Vec3 pos, Vec3 rot, Vec3 scale);
+
+// Apply transforms to all models in array (call after changing transforms)
+void xModelUpdate(const xModel* models, int count);
 
 #ifdef __cplusplus
 }
@@ -78,14 +103,13 @@ inline void xCameraInit(xCamera *cam)
 
 inline void xCameraUpdate(xCamera *cam)
 {
-    // Clamp pitch
+    // Clamp pitch to avoid gimbal lock
     if (cam->pitch > 89.0f) cam->pitch = 89.0f;
     if (cam->pitch < -89.0f) cam->pitch = -89.0f;
 
-    // Calculate front vector
+    // Calculate front vector from yaw/pitch
     const float yaw_rad = cam->yaw * M_PI / 180.0f;
     const float pitch_rad = cam->pitch * M_PI / 180.0f;
-
     cam->front = vec3(
         cosf(yaw_rad) * cosf(pitch_rad),
         sinf(pitch_rad),
@@ -95,7 +119,7 @@ inline void xCameraUpdate(xCamera *cam)
 
     // Calculate right and up vectors
     cam->right = norm(cross(cam->front, vec3(0, 1, 0)));
-    cam->up    = cross(cam->right, cam->front);
+    cam->up = cross(cam->right, cam->front);
 }
 
 inline void xCameraMove(xCamera *cam, const Vec3 direction, const float speed)
@@ -114,10 +138,8 @@ inline Ray xCameraGetRay(const xCamera *cam, const float u, const float v, const
 {
     const float viewport_height = 2.0f;
     const float viewport_width = aspect_ratio * viewport_height;
-
     Vec3 rd = add(cam->front, add(mul(cam->up, v * viewport_height), mul(cam->right, u * viewport_width)));
     rd = norm(rd);
-
     return (Ray){cam->position, rd};
 }
 
@@ -155,8 +177,13 @@ inline xModel* xModelCreate(xModel* storage, int* count, const int max, const Ve
 
     xModel* m = &storage[(*count)++];
     *m = (xModel){
+        .triangles = NULL,
+        .transformed_triangles = NULL,
+        .num_triangles = 0,
+        .capacity = 0,
         .position = {0, 0, 0},
         .scale = {1.0f, 1.0f, 1.0f},
+        .rot_x = 0, .rot_y = 0, .rot_z = 0,
         .mat = {color, refl, 0.0f}
     };
     return m;
@@ -166,36 +193,81 @@ inline void xModelLoad(xModel* m, const char* path)
 {
     FILE* f = fopen(path, "r");
     if (!f) {
-        printf("Failed to load: %s\n", path);
+        fprintf(stderr, "Failed to open OBJ file: %s\n", path);
         return;
     }
 
-    Vec3 verts[1000];
-    xTriangle tris[1000];
-    int nv = 0, nt = 0;
+    // Dynamic arrays for vertices and triangles
+    int vert_capacity = INITIAL_VERTEX_CAPACITY;
+    int tri_capacity = INITIAL_TRIANGLE_CAPACITY;
 
+    Vec3* verts = (Vec3*)malloc(vert_capacity * sizeof(Vec3));
+    xTriangle* tris = (xTriangle*)malloc(tri_capacity * sizeof(xTriangle));
+    assert(verts && tris && "Failed to allocate OBJ parsing buffers");
+
+    int nv = 0, nt = 0;
     char buf[256];
-    while (fgets(buf, sizeof(buf), f))
-    {
-        if (buf[0] == 'v' && buf[1] == ' ')
-        {
+
+    while (fgets(buf, sizeof(buf), f)) {
+        if (buf[0] == 'v' && buf[1] == ' ') {
+            // Vertex line
+            if (nv >= vert_capacity) {
+                vert_capacity *= 2;
+                verts = (Vec3*)realloc(verts, vert_capacity * sizeof(Vec3));
+                assert(verts && "Failed to reallocate vertex buffer");
+            }
+
             float x, y, z;
             sscanf(buf + 2, "%f %f %f", &x, &y, &z);
             verts[nv++] = vec3(x, y, z);
         }
-        else if (buf[0] == 'f')
-        {
+        else if (buf[0] == 'f') {
+            // Face line (only supports triangulated meshes)
+            if (nt >= tri_capacity) {
+                tri_capacity *= 2;
+                tris = (xTriangle*)realloc(tris, tri_capacity * sizeof(xTriangle));
+                assert(tris && "Failed to reallocate triangle buffer");
+            }
+
             int a, b, c;
-            sscanf(buf + 2, "%d %d %d", &a, &b, &c);
-            tris[nt++] = (xTriangle){verts[a-1], verts[b-1], verts[c-1]};
+            if (sscanf(buf + 2, "%d %d %d", &a, &b, &c) == 3) {
+                // OBJ indices are 1-based
+                if (a > 0 && a <= nv && b > 0 && b <= nv && c > 0 && c <= nv) {
+                    tris[nt++] = (xTriangle){verts[a-1], verts[b-1], verts[c-1]};
+                }
+            }
         }
     }
     fclose(f);
 
+    // Allocate exact size for model
     m->triangles = (xTriangle*)malloc(nt * sizeof(xTriangle));
     m->transformed_triangles = (xTriangle*)malloc(nt * sizeof(xTriangle));
+    assert(m->triangles && m->transformed_triangles && "Failed to allocate model triangles");
+
     memcpy(m->triangles, tris, nt * sizeof(xTriangle));
     m->num_triangles = nt;
+    m->capacity = nt;
+
+    // Free temporary buffers
+    free(verts);
+    free(tris);
+
+    printf("Loaded %s: %d vertices, %d triangles\n", path, nv, nt);
+}
+
+inline void xModelFree(xModel* m)
+{
+    if (m->triangles) {
+        free(m->triangles);
+        m->triangles = NULL;
+    }
+    if (m->transformed_triangles) {
+        free(m->transformed_triangles);
+        m->transformed_triangles = NULL;
+    }
+    m->num_triangles = 0;
+    m->capacity = 0;
 }
 
 inline void xModelTransform(xModel* m, const Vec3 pos, const Vec3 rot, const Vec3 scale)
@@ -209,11 +281,9 @@ inline void xModelTransform(xModel* m, const Vec3 pos, const Vec3 rot, const Vec
 
 inline void xModelUpdate(const xModel* models, const int count)
 {
-    for (int i = 0; i < count; i++)
-    {
+    for (int i = 0; i < count; i++) {
         const xModel* m = &models[i];
-        for (int j = 0; j < m->num_triangles; j++)
-        {
+        for (int j = 0; j < m->num_triangles; j++) {
             m->transformed_triangles[j].v0 = transform_vertex(m->triangles[j].v0, m);
             m->transformed_triangles[j].v1 = transform_vertex(m->triangles[j].v1, m);
             m->transformed_triangles[j].v2 = transform_vertex(m->triangles[j].v2, m);

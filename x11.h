@@ -1,15 +1,15 @@
 // ============================================================================
-// x11.h - Core window management 
+// x11.h - Core window management
 // ============================================================================
 #ifndef X11_WRAPPER_H
 #define X11_WRAPPER_H
 
-#include <stdint.h>
-#include <stdbool.h>
-#include <stdlib.h>
-#include <time.h>
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
+#include <stdint.h>
+#include <stdbool.h>
+#include <time.h>
+#include <assert.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -25,19 +25,32 @@ typedef struct xWindow {
     int height;
     int x, y;
     const char *title;
-    uint32_t *buffer;
-    double fps;
-    double deltat;
+    uint32_t *buffer;    // Direct pixel buffer for software rendering
+    double fps;          // Target frames per second
+    double deltat;       // Delta time of last frame in seconds
     struct timespec lastt;
 } xWindow;
 
-void   xWindowInit(xWindow *w);
-bool   xCreateWindow(xWindow *w);
-void   xDestroyWindow(xWindow *w);
-void   xUpdateFrame(xWindow *w);
-void   xUpdateFramebuffer(const xWindow *w);
+// Initialize window structure with default values
+void xWindowInit(xWindow *w);
+
+// Create and display X11 window, returns false on failure
+bool xCreateWindow(xWindow *w);
+
+// Cleanup and destroy window resources
+void xDestroyWindow(xWindow *w);
+
+// Update frame timing (sleeps to maintain target FPS)
+void xUpdateFrame(xWindow *w);
+
+// Push pixel buffer to screen
+void xUpdateFramebuffer(const xWindow *w);
+
+// Get current FPS based on actual frame time
 double xGetFPS(const xWindow *w);
-void   xDrawPixel(const xWindow *w, int x, int y, uint32_t color);
+
+// Draw single pixel at (x,y) with bounds checking
+void xDrawPixel(const xWindow *w, int x, int y, uint32_t color);
 
 #ifdef __cplusplus
 }
@@ -45,13 +58,15 @@ void   xDrawPixel(const xWindow *w, int x, int y, uint32_t color);
 
 #ifdef XKEYS_IMPLEMENTATION
 #include "xKeys.h"
-#endif // XKEYS_IMPLEMENTATION
+#endif
+
 #ifdef XMATH_IMPLEMENTATION
 #include "xMath.h"
-#endif // XMATH_IMPLEMENTATION
+#endif
+
 #ifdef XUTIL_IMPLEMENTATION
 #include "xUtil.h"
-#endif // XUTIL_IMPLEMENTATION
+#endif
 
 inline void xWindowInit(xWindow *w)
 {
@@ -73,7 +88,10 @@ inline void xWindowInit(xWindow *w)
 
 inline bool xCreateWindow(xWindow *w)
 {
-    if (!w->display) goto breakpoint;
+    if (!w->display) {
+        fprintf(stderr, "Failed to open X11 display\n");
+        return false;
+    }
 
     w->window = XCreateSimpleWindow(
         w->display, RootWindow(w->display, w->screen),
@@ -82,58 +100,58 @@ inline bool xCreateWindow(xWindow *w)
         WhitePixel(w->display, w->screen)
     );
 
-    if (!w->window) goto breakpoint;
+    if (!w->window) {
+        fprintf(stderr, "Failed to create X11 window\n");
+        return false;
+    }
 
     XStoreName(w->display, w->window, w->title);
-    XSelectInput(w->display, w->window, 
-                 ExposureMask | KeyPressMask | KeyReleaseMask | 
-                 StructureNotifyMask | PointerMotionMask | 
-                 ButtonPressMask | ButtonReleaseMask);
+    XSelectInput(w->display, w->window,
+        ExposureMask | KeyPressMask | KeyReleaseMask |
+        StructureNotifyMask | PointerMotionMask |
+        ButtonPressMask | ButtonReleaseMask);
 
     Atom wmDeleteMessage = XInternAtom(w->display, "WM_DELETE_WINDOW", False);
     XSetWMProtocols(w->display, w->window, &wmDeleteMessage, 1);
+
     XMapWindow(w->display, w->window);
     XFlush(w->display);
 
     XEvent ev;
     XWindowEvent(w->display, w->window, ExposureMask, &ev);
-    w->gc = DefaultGC(w->display, w->screen);
 
+    w->gc = DefaultGC(w->display, w->screen);
     w->buffer = (uint32_t *) malloc(w->width * w->height * sizeof(uint32_t));
+    assert(w->buffer && "Failed to allocate framebuffer");
+
     w->image = XCreateImage(
-        w->display, 
+        w->display,
         DefaultVisual(w->display, w->screen),
         DefaultDepth(w->display, w->screen),
-        ZPixmap, 
-        0, 
-        (char*) w->buffer,
-        w->width, 
-        w->height, 32, 0
+        ZPixmap, 0, (char*) w->buffer,
+        w->width, w->height, 32, 0
     );
+    assert(w->image && "Failed to create XImage");
 
     clock_gettime(CLOCK_MONOTONIC, &w->lastt);
     return true;
-
-    breakpoint:
-    if (!w->display) printf("Failed to open display (x11.h / xCreateWindow())\n");
-    if (!w->window)  printf("Failed to create window (x11.h / xCreateWindow())\n");
-    return false;
 }
 
 inline void xDestroyWindow(xWindow *w)
 {
     if (!w->display) return;
-    if (w->image) 
-    {
+
+    if (w->image) {
         XDestroyImage(w->image);
         w->image = NULL;
         w->buffer = NULL;
     }
-    if (w->window)
-    {
+
+    if (w->window) {
         XDestroyWindow(w->display, w->window);
         w->window = 0;
     }
+
     XSync(w->display, False);
     XCloseDisplay(w->display);
     w->display = NULL;
@@ -148,8 +166,7 @@ inline void xUpdateFrame(xWindow *w)
                      (current_time.tv_nsec - w->lastt.tv_nsec) / 1e9;
 
     const double target_frame_time = 1.0 / w->fps;
-    if (elapsed < target_frame_time) 
-    {
+    if (elapsed < target_frame_time) {
         const double sleep_time = target_frame_time - elapsed;
         struct timespec sleep_spec;
         sleep_spec.tv_sec = (time_t)sleep_time;
@@ -178,7 +195,8 @@ inline double xGetFPS(const xWindow *w)
 
 inline void xDrawPixel(const xWindow *w, int x, int y, uint32_t color)
 {
-    if (x >= 0 && x < w->width && y >= 0 && y < w->height) w->buffer[y * w->width + x] = color;
+    if (x >= 0 && x < w->width && y >= 0 && y < w->height)
+        w->buffer[y * w->width + x] = color;
 }
 
 #endif // X11_WRAPPER_H

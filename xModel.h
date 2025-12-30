@@ -146,5 +146,79 @@ inline void xModelUpdate(const xModel* models, const int count) {
     }
 }
 
+inline void xModelLoad(xModel* m, const char* path)
+{
+    FILE* f = fopen(path, "r");
+    if (!f) {
+        fprintf(stderr, "Failed to open OBJ file: %s\n", path);
+        return;
+    }
+
+    // Dynamic arrays for vertices and triangles
+    int vert_capacity = INITIAL_VERTEX_CAPACITY;
+    int tri_capacity = INITIAL_TRIANGLE_CAPACITY;
+
+    Vec3* verts = (Vec3*)malloc(vert_capacity * sizeof(Vec3));
+    xTriangle* tris = (xTriangle*)malloc(tri_capacity * sizeof(xTriangle));
+    assert(verts && tris && "Failed to allocate OBJ parsing buffers");
+
+    int nv = 0, nt = 0;
+    char buf[256];
+
+    while (fgets(buf, sizeof(buf), f))
+    {
+        if (buf[0] == 'v' && buf[1] == ' ')
+        {
+            // Vertex line
+            if (nv >= vert_capacity)
+            {
+                vert_capacity *= 2;
+                verts = (Vec3*)realloc(verts, vert_capacity * sizeof(Vec3));
+                assert(verts && "Failed to reallocate vertex buffer");
+            }
+
+            float x, y, z;
+            sscanf(buf + 2, "%f %f %f", &x, &y, &z);
+            verts[nv++] = vec3(x, y, z);
+        }
+        else if (buf[0] == 'f')
+        {
+            // Face line (only supports triangulated meshes)
+            if (nt >= tri_capacity)
+            {
+                tri_capacity *= 2;
+                tris = (xTriangle*)realloc(tris, tri_capacity * sizeof(xTriangle));
+                assert(tris && "Failed to reallocate triangle buffer");
+            }
+
+            int a, b, c;
+            if (sscanf(buf + 2, "%d %d %d", &a, &b, &c) == 3)
+            {
+                // OBJ indices are 1-based
+                if (a > 0 && a <= nv && b > 0 && b <= nv && c > 0 && c <= nv)
+                {
+                    tris[nt++] = (xTriangle){verts[a-1], verts[b-1], verts[c-1]};
+                }
+            }
+        }
+    }
+    fclose(f);
+
+    // Allocate exact size for model
+    m->triangles = (xTriangle*)malloc(nt * sizeof(xTriangle));
+    m->transformed_triangles = (xTriangle*)malloc(nt * sizeof(xTriangle));
+    assert(m->triangles && m->transformed_triangles && "Failed to allocate model triangles");
+
+    memcpy(m->triangles, tris, nt * sizeof(xTriangle));
+    m->num_triangles = nt;
+    m->capacity = nt;
+
+    // Free temporary buffers
+    free(verts);
+    free(tris);
+
+    printf("Loaded %s: %d vertices, %d triangles\n", path, nv, nt);
+}
+
 #endif // XMODEL_IMPLEMENTATION
 #endif // XMODEL_H

@@ -5,10 +5,7 @@
 #define XMATH_IMPLEMENTATION
 #define XUTIL_IMPLEMENTATION
 
-#include "x11.h"
-#include "xKeys.h"
-#include "xMath.h"
-#include "xUtil.h"
+#include "../x11.h"
 
 #define SKY_COLOR 0x000000
 

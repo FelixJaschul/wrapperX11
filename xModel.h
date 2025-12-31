@@ -25,6 +25,7 @@ typedef struct {
 typedef struct {
     Vec3 v0, v1, v2;
     bool enabled;
+    int front_hits, back_hits;
 } xTriangle;
 
 // 3D model with transform and material

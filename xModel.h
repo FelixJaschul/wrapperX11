@@ -24,6 +24,7 @@ typedef struct {
 // Triangle primitive for meshes
 typedef struct {
     Vec3 v0, v1, v2;
+    bool enabled;
 } xTriangle;
 
 // 3D model with transform and material

@@ -220,8 +220,8 @@ inline void xModelLoad(xModel* m, const char* path)
     fclose(f);
 
     // Allocate exact size for model
-    m->triangles = (xTriangle*)malloc(nt * sizeof(xTriangle));
-    m->transformed_triangles = (xTriangle*)malloc(nt * sizeof(xTriangle));
+    m->triangles             = malloc(nt * sizeof(xTriangle));
+    m->transformed_triangles = malloc(nt * sizeof(xTriangle));
     assert(m->triangles && m->transformed_triangles && "Failed to allocate model triangles");
 
     memcpy(m->triangles, tris, nt * sizeof(xTriangle));

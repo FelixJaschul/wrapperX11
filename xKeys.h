@@ -66,20 +66,20 @@ typedef struct xInputState {
     bool mouse_grabbed;
     Window grab_window;
     int center_x, center_y;
-} xInputState;
+} xInput;
 
 // Initialize input state to zero
 /*  -> Example:
  *  xInputState input;
  *  xInputInit(&input);
  */
-void xInputInit(xInputState *state);
+void xInputInit(xInput *input);
 
 // Poll X11 events and update input state, returns true if window should close
 /*  -> Example:
  *  if (xPollEvents(win.display, &input)) break;
  */
-bool xPollEvents(Display *display, xInputState *state);
+bool xPollEvents(Display *display, xInput *input);
 
 // Copy current frame state to previous (call once per frame after processing)
 /*  -> Example:
@@ -88,66 +88,66 @@ bool xPollEvents(Display *display, xInputState *state);
  *      xUpdateInput(&input);
  *  }
  */
-void xUpdateInput(xInputState *state);
+void xUpdateInput(xInput *input);
 
 // Check if key is currently held down
 /*  -> Example:
  *  if (xIsKeyDown(&input, KEY_W)) // Move forward
  */
-bool xIsKeyDown(const xInputState *state, Key key);
+bool xIsKeyDown(const xInput *input, Key key);
 
 // Check if key was just pressed this frame
 /*  -> Example:
  *  if (xIsKeyPressed(&input, KEY_SPACE)) // Jump
  */
-bool xIsKeyPressed(const xInputState *state, Key key);
+bool xIsKeyPressed(const xInput *input, Key key);
 
 // Check if key was just released this frame
 /*  -> Example:
  *  if (xIsKeyReleased(&input, KEY_E)) // Use item
  */
-bool xIsKeyReleased(const xInputState *state, Key key);
+bool xIsKeyReleased(const xInput *input, Key key);
 
 // Check if mouse button is currently held down
 /*  -> Example:
  *  if (xIsMouseDown(&input, MOUSE_LEFT)) // Shoot
  */
-bool xIsMouseDown(const xInputState *state, MouseButton btn);
+bool xIsMouseDown(const xInput *input, MouseButton btn);
 
 // Check if mouse button was just pressed this frame
-bool xIsMousePressed(const xInputState *state, MouseButton btn);
+bool xIsMousePressed(const xInput *input, MouseButton btn);
 
 // Check if mouse button was just released this frame
-bool xIsMouseReleased(const xInputState *state, MouseButton btn);
+bool xIsMouseReleased(const xInput *input, MouseButton btn);
 
 // Get current mouse position in window coordinates
 /*  -> Example:
  *  int mx, my;
  *  xGetMousePosition(&input, &mx, &my);
  */
-void xGetMousePosition(const xInputState *state, int *x, int *y);
+void xGetMousePosition(const xInput *input, int *x, int *y);
 
 // Get mouse delta since last frame (for FPS camera controls)
 /*  -> Example:
  *  int dx, dy;
  *  xGetMouseDelta(&input, &dx, &dy);
  */
-void xGetMouseDelta(const xInputState *state, int *dx, int *dy);
+void xGetMouseDelta(const xInput *input, int *dx, int *dy);
 
 // Grab mouse cursor (hides and locks to window center)
 /*  -> Example:
  *  xGrabMouse(win.display, win.window, win.width, win.height, &input);
  */
-void xGrabMouse(Display *display, Window window, int width, int height, xInputState *state);
+void xGrabMouse(Display *display, Window window, int width, int height, xInput *input);
 
 // Release grabbed mouse cursor
 /*  -> Example:
  *  xReleaseMouse(win.display, win.window, &input);
  */
-void xReleaseMouse(Display *display, Window window, xInputState *state);
+void xReleaseMouse(Display *display, Window window, xInput *input);
 
 // Check if mouse is currently grabbed
-bool xIsMouseGrabbed(const xInputState *state);
+bool xIsMouseGrabbed(const xInput *input);
 
 #ifdef __cplusplus
 }
@@ -155,86 +155,92 @@ bool xIsMouseGrabbed(const xInputState *state);
 
 #ifdef XKEYS_IMPLEMENTATION
 
-static void set_key(xInputState *state, const Key key, const bool down)
+static void set_key(xInput *input, const Key key, const bool down)
 {
-    if (key < KEY_COUNT) state->key_curr[key] = down;
+    if (key < KEY_COUNT) input->key_curr[key] = down;
 }
 
-static void set_mouse(xInputState *state, const MouseButton btn, const bool down)
+static void set_mouse(xInput *input, const MouseButton btn, const bool down)
 {
-    if (btn < MOUSE_COUNT) state->mouse_curr[btn] = down;
+    if (btn < MOUSE_COUNT) input->mouse_curr[btn] = down;
 }
 
-inline void xInputInit(xInputState *state)
+inline void xInputInit(xInput *input)
 {
     for (int i = 0; i < KEY_COUNT; i++) {
-        state->key_curr[i] = false;
-        state->key_prev[i] = false;
+        input->key_curr[i] = false;
+        input->key_prev[i] = false;
     }
     for (int i = 0; i < MOUSE_COUNT; i++) {
-        state->mouse_curr[i] = false;
-        state->mouse_prev[i] = false;
+        input->mouse_curr[i] = false;
+        input->mouse_prev[i] = false;
     }
-    state->mouse_x = 0;
-    state->mouse_y = 0;
-    state->mouse_dx = 0;
-    state->mouse_dy = 0;
-    state->last_x = 0;
-    state->last_y = 0;
-    state->mouse_grabbed = false;
-    state->grab_window = 0;
-    state->center_x = 400;
-    state->center_y = 300;
+    input->mouse_x = 0;
+    input->mouse_y = 0;
+    input->mouse_dx = 0;
+    input->mouse_dy = 0;
+    input->last_x = 0;
+    input->last_y = 0;
+    input->mouse_grabbed = false;
+    input->grab_window = 0;
+    input->center_x = 400;
+    input->center_y = 300;
 }
 
-inline bool xPollEvents(Display *display, xInputState *state)
+inline bool xPollEvents(Display *display, xInput *input)
 {
     const Atom wmDeleteMessage = XInternAtom(display, "WM_DELETE_WINDOW", False);
     bool shouldClose = false;
 
-    state->mouse_dx = 0;
-    state->mouse_dy = 0;
+    input->mouse_dx = 0;
+    input->mouse_dy = 0;
 
-    while (XPending(display) > 0) {
+    while (XPending(display) > 0)
+    {
         XEvent event;
         XNextEvent(display, &event);
 
-        switch (event.type) {
+        switch (event.type)
+        {
             case ClientMessage:
-                if ((Atom)event.xclient.data.l[0] == wmDeleteMessage)
-                    shouldClose = true;
+                if ((Atom)event.xclient.data.l[0] == wmDeleteMessage) shouldClose = true;
                 break;
 
             case MotionNotify:
-                if (state->mouse_grabbed) {
-                    state->mouse_dx += event.xmotion.x - state->last_x;
-                    state->mouse_dy += event.xmotion.y - state->last_y;
+                if (input->mouse_grabbed)
+                {
+                    input->mouse_dx += event.xmotion.x - input->last_x;
+                    input->mouse_dy += event.xmotion.y - input->last_y;
                 }
-                state->mouse_x = event.xmotion.x;
-                state->mouse_y = event.xmotion.y;
-                state->last_x = state->mouse_x;
-                state->last_y = state->mouse_y;
+                input->mouse_x = event.xmotion.x;
+                input->mouse_y = event.xmotion.y;
+                input->last_x = input->mouse_x;
+                input->last_y = input->mouse_y;
                 break;
 
             case ButtonPress:
-            case ButtonRelease: {
+            case ButtonRelease:
+            {
                 const bool down = (event.type == ButtonPress);
-                switch (event.xbutton.button) {
-                    case Button1: set_mouse(state, MOUSE_LEFT, down); break;
-                    case Button2: set_mouse(state, MOUSE_MIDDLE, down); break;
-                    case Button3: set_mouse(state, MOUSE_RIGHT, down); break;
+                switch (event.xbutton.button)
+                {
+                    case Button1: set_mouse(input, MOUSE_LEFT, down); break;
+                    case Button2: set_mouse(input, MOUSE_MIDDLE, down); break;
+                    case Button3: set_mouse(input, MOUSE_RIGHT, down); break;
                     default: break;
                 }
                 break;
             }
 
             case KeyPress:
-            case KeyRelease: {
+            case KeyRelease:
+            {
                 const bool down = (event.type == KeyPress);
                 const KeySym sym = XLookupKeysym(&event.xkey, 0);
                 Key k = KEY_UNKNOWN;
 
-                switch (sym) {
+                switch (sym)
+                {
                     case XK_Escape: k = KEY_ESCAPE; break;
                     case XK_space: k = KEY_SPACE; break;
                     case XK_Return: k = KEY_ENTER; break;
@@ -293,7 +299,7 @@ inline bool xPollEvents(Display *display, xInputState *state)
                     default: break;
                 }
 
-                if (k != KEY_UNKNOWN) set_key(state, k, down);
+                if (k != KEY_UNKNOWN) set_key(input, k, down);
                 break;
             }
 
@@ -302,74 +308,72 @@ inline bool xPollEvents(Display *display, xInputState *state)
     }
 
     // Recenter mouse if grabbed and moved
-    if (state->mouse_grabbed && (state->mouse_dx != 0 || state->mouse_dy != 0)) {
-        XWarpPointer(display, None, state->grab_window, 0, 0, 0, 0,
-                     state->center_x, state->center_y);
+    if (input->mouse_grabbed && (input->mouse_dx != 0 || input->mouse_dy != 0))
+    {
+        XWarpPointer(display, None, input->grab_window, 0, 0, 0, 0, input->center_x, input->center_y);
         XFlush(display);
-        state->last_x = state->center_x;
-        state->last_y = state->center_y;
+        input->last_x = input->center_x;
+        input->last_y = input->center_y;
     }
 
     return shouldClose;
 }
 
-inline void xUpdateInput(xInputState *state)
+inline void xUpdateInput(xInput *input)
 {
-    for (int i = 0; i < KEY_COUNT; i++)
-        state->key_prev[i] = state->key_curr[i];
-    for (int i = 0; i < MOUSE_COUNT; i++)
-        state->mouse_prev[i] = state->mouse_curr[i];
+    for (int i = 0; i < KEY_COUNT; i++) input->key_prev[i] = input->key_curr[i];
+    for (int i = 0; i < MOUSE_COUNT; i++) input->mouse_prev[i] = input->mouse_curr[i];
 }
 
-inline bool xIsKeyDown(const xInputState *state, const Key key)
+inline bool xIsKeyDown(const xInput *input, const Key key)
 {
-    return key < KEY_COUNT ? state->key_curr[key] : false;
+    return key < KEY_COUNT ? input->key_curr[key] : false;
 }
 
-inline bool xIsKeyPressed(const xInputState *state, const Key key)
+inline bool xIsKeyPressed(const xInput *input, const Key key)
 {
-    return key < KEY_COUNT ? (state->key_curr[key] && !state->key_prev[key]) : false;
+    return key < KEY_COUNT ? (input->key_curr[key] && !input->key_prev[key]) : false;
 }
 
-inline bool xIsKeyReleased(const xInputState *state, const Key key)
+inline bool xIsKeyReleased(const xInput *input, const Key key)
 {
-    return key < KEY_COUNT ? (!state->key_curr[key] && state->key_prev[key]) : false;
+    return key < KEY_COUNT ? (!input->key_curr[key] && input->key_prev[key]) : false;
 }
 
-inline bool xIsMouseDown(const xInputState *state, const MouseButton btn)
+inline bool xIsMouseDown(const xInput *input, const MouseButton btn)
 {
-    return btn < MOUSE_COUNT ? state->mouse_curr[btn] : false;
+    return btn < MOUSE_COUNT ? input->mouse_curr[btn] : false;
 }
 
-inline bool xIsMousePressed(const xInputState *state, const MouseButton btn)
+inline bool xIsMousePressed(const xInput *input, const MouseButton btn)
 {
-    return btn < MOUSE_COUNT ? (state->mouse_curr[btn] && !state->mouse_prev[btn]) : false;
+    return btn < MOUSE_COUNT ? (input->mouse_curr[btn] && !input->mouse_prev[btn]) : false;
 }
 
-inline bool xIsMouseReleased(const xInputState *state, const MouseButton btn)
+inline bool xIsMouseReleased(const xInput *input, const MouseButton btn)
 {
-    return btn < MOUSE_COUNT ? (!state->mouse_curr[btn] && state->mouse_prev[btn]) : false;
+    return btn < MOUSE_COUNT ? (!input->mouse_curr[btn] && input->mouse_prev[btn]) : false;
 }
 
-inline void xGetMousePosition(const xInputState *state, int *x, int *y)
+inline void xGetMousePosition(const xInput *input, int *x, int *y)
 {
-    if (x) *x = state->mouse_x;
-    if (y) *y = state->mouse_y;
+    if (x) *x = input->mouse_x;
+    if (y) *y = input->mouse_y;
 }
 
-inline void xGetMouseDelta(const xInputState *state, int *dx, int *dy)
+inline void xGetMouseDelta(const xInput *input, int *dx, int *dy)
 {
-    if (dx) *dx = state->mouse_dx;
-    if (dy) *dy = state->mouse_dy;
+    if (dx) *dx = input->mouse_dx;
+    if (dy) *dy = input->mouse_dy;
 }
 
-inline void xGrabMouse(Display *display, Window window, int width, int height, xInputState *state)
+inline void xGrabMouse(Display *display, const Window window, const int width, const int height, xInput *input)
 {
-    if (state->mouse_grabbed) return;
+    if (input->mouse_grabbed) return;
 
-    state->center_x = width / 2;
-    state->center_y = height / 2;
-    state->grab_window = window;
+    input->center_x = width / 2;
+    input->center_y = height / 2;
+    input->grab_window = window;
 
     XColor dummy;
     const char data[1] = {0};
@@ -382,30 +386,30 @@ inline void xGrabMouse(Display *display, Window window, int width, int height, x
                  PointerMotionMask | ButtonPressMask | ButtonReleaseMask,
                  GrabModeAsync, GrabModeAsync, window, None, CurrentTime);
 
-    XWarpPointer(display, None, window, 0, 0, 0, 0, state->center_x, state->center_y);
+    XWarpPointer(display, None, window, 0, 0, 0, 0, input->center_x, input->center_y);
     XFlush(display);
 
-    state->last_x = state->center_x;
-    state->last_y = state->center_y;
-    state->mouse_grabbed = true;
-    state->mouse_dx = 0;
-    state->mouse_dy = 0;
+    input->last_x = input->center_x;
+    input->last_y = input->center_y;
+    input->mouse_grabbed = true;
+    input->mouse_dx = 0;
+    input->mouse_dy = 0;
 }
 
-inline void xReleaseMouse(Display *display, Window window, xInputState *state)
+inline void xReleaseMouse(Display *display, const Window window, xInput *input)
 {
-    if (!state->mouse_grabbed) return;
+    if (!input->mouse_grabbed) return;
 
     XUngrabPointer(display, CurrentTime);
     XDefineCursor(display, window, None);
-    state->mouse_grabbed = false;
-    state->mouse_dx = 0;
-    state->mouse_dy = 0;
+    input->mouse_grabbed = false;
+    input->mouse_dx = 0;
+    input->mouse_dy = 0;
 }
 
-inline bool xIsMouseGrabbed(const xInputState *state)
+inline bool xIsMouseGrabbed(const xInput *input)
 {
-    return state->mouse_grabbed;
+    return input->mouse_grabbed;
 }
 
 #endif // XKEYS_IMPLEMENTATION

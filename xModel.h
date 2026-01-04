@@ -18,6 +18,7 @@ extern "C" {
 typedef struct {
     Vec3 color;
     float reflectivity;  // 0.0 = matte, 1.0 = mirror
+	float specular;
 } xMaterial;
 
 // Triangle primitive for meshes

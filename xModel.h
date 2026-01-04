@@ -42,7 +42,7 @@ typedef struct {
 /*  -> Example:
  *  xModel* cube = xModelCreate(scene_models, &num_models, MAX_MODELS, vec3(1,0,0), 0.5f);
  */
-xModel* xModelCreate(xModel* storage, int* count, int max, Vec3 color, float refl);
+xModel* xModelCreate(xModel* storage, int* count, int max, Vec3 color, float refl, float spec);
 
 // Load OBJ file into model (dynamically allocates triangles)
 /*  -> Example:

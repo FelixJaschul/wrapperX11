@@ -43,29 +43,29 @@ typedef struct Window {
     double fps;          // Target frames per second
     double deltat;       // Delta time of last frame in seconds
     struct timespec lastt;
-} Window;
+} Window_t;
 
 // Initialize window structure with default values
 /*  -> Example:
- *  Window win;
+ *  Window_t win;
  *  windowInit(&win);
  *  win.title = "My Window";
  *  win.width = 1280;
  *  win.height = 720;
  */
-void windowInit(Window *w);
+void windowInit(Window_t *w);
 
 // Create and display window, returns false on failure
 /*  -> Example:
  *  if (!createWindow(&win)) return 1;
  */
-bool createWindow(Window *w);
+bool createWindow(Window_t *w);
 
 // Cleanup and destroy window resources
 /*  -> Example:
  *  destroyWindow(&win);
  */
-void destroyWindow(Window *w);
+void destroyWindow(Window_t *w);
 
 // Update frame timing (sleeps to maintain target FPS)
 /*  -> Example:
@@ -74,26 +74,26 @@ void destroyWindow(Window *w);
  *      updateFrame(&win);
  *  }
  */
-void updateFrame(Window *w);
+void updateFrame(Window_t *w);
 
 // Push pixel buffer to screen
 /*  -> Example:
  *  // After drawing to win.buffer
  *  updateFramebuffer(&win);
  */
-void updateFramebuffer(const Window *w);
+void updateFramebuffer(const Window_t *w);
 
 // Get current FPS based on actual frame time
 /*  -> Example:
  *  printf("FPS: %.2f\n", getFPS(&win));
  */
-double getFPS(const Window *w);
+double getFPS(const Window_t *w);
 
 // Draw single pixel at (x,y) with bounds checking
 /*  -> Example:
  *  drawPixel(&win, 100, 100, 0xFF0000); // Draw red pixel
  */
-void drawPixel(const Window *w, int x, int y, uint32_t color);
+void drawPixel(const Window_t *w, int x, int y, uint32_t color);
 
 #ifdef __cplusplus
 }
@@ -105,7 +105,7 @@ void drawPixel(const Window *w, int x, int y, uint32_t color);
 
 #ifdef CORE_IMPLEMENTATION
 
-inline void windowInit(Window *w)
+inline void windowInit(Window_t *w)
 {
 #ifdef SDL_IMPLEMENTATION
     if (SDL_Init(SDL_INIT_VIDEO) < 0) {
@@ -132,7 +132,7 @@ inline void windowInit(Window *w)
     clock_gettime(CLOCK_MONOTONIC, &w->lastt);
 }
 
-inline bool createWindow(Window *w)
+inline bool createWindow(Window_t *w)
 {
 #ifdef SDL_IMPLEMENTATION
     if (!SDL_WasInit(SDL_INIT_VIDEO)) {
@@ -218,7 +218,7 @@ inline bool createWindow(Window *w)
 #endif
 }
 
-inline void destroyWindow(Window *w)
+inline void destroyWindow(Window_t *w)
 {
 #ifdef SDL_IMPLEMENTATION
     if (w->renderer) {
@@ -257,7 +257,7 @@ inline void destroyWindow(Window *w)
 #endif
 }
 
-inline void updateFrame(Window *w)
+inline void updateFrame(Window_t *w)
 {
     struct timespec current_time;
     clock_gettime(CLOCK_MONOTONIC, &current_time);
@@ -282,7 +282,7 @@ inline void updateFrame(Window *w)
     w->lastt  = current_time;
 }
 
-inline void updateFramebuffer(const Window *w)
+inline void updateFramebuffer(const Window_t *w)
 {
 #ifdef SDL_IMPLEMENTATION
     if (!w->renderer || !w->buffer) return;
@@ -320,12 +320,12 @@ inline void updateFramebuffer(const Window *w)
 #endif
 }
 
-inline double getFPS(const Window *w)
+inline double getFPS(const Window_t *w)
 {
     return (w->deltat > 0.0) ? (1.0 / w->deltat) : 0.0;
 }
 
-inline void drawPixel(const Window *w, int x, int y, uint32_t color)
+inline void drawPixel(const Window_t *w, int x, int y, uint32_t color)
 {
     if (x >= 0 && x < w->width && y >= 0 && y < w->height)
         w->buffer[y * w->width + x] = color;

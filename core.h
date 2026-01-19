@@ -14,6 +14,11 @@
 
 #ifdef SDL_IMPLEMENTATION
     #include <SDL3/SDL.h>
+    #ifdef IMGUI_IMPLEMENTATION
+        #include <imgui.h>
+        #include <imgui_impl_sdl3.h>
+        #include <imgui_impl_sdlrenderer3.h>
+    #endif
 #else
     #include <X11/Xlib.h>
     #include <X11/Xutil.h>
@@ -164,9 +169,16 @@ inline bool createWindow(Window_t *w)
     w->buffer = (uint32_t*)malloc(w->width * w->height * sizeof(uint32_t));
     assert(w->buffer && "Failed to allocate framebuffer");
 
+#ifdef IMGUI_IMPLEMENTATION
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGui::StyleColorsDark();
+    ImGui_ImplSDL3_InitForSDLRenderer(w->window, w->renderer);
+    ImGui_ImplSDLRenderer3_Init(w->renderer);
+#endif
+
     clock_gettime(CLOCK_MONOTONIC, &w->lastt);
     return true;
-
 #else
     if (!w->display) {
         fprintf(stderr, "Failed to open X11 display\n");
@@ -221,6 +233,11 @@ inline bool createWindow(Window_t *w)
 inline void destroyWindow(Window_t *w)
 {
 #ifdef SDL_IMPLEMENTATION
+#ifdef IMGUI_IMPLEMENTATION
+    ImGui_ImplSDLRenderer3_Shutdown();
+    ImGui_ImplSDL3_Shutdown();
+    ImGui::DestroyContext();
+#endif
     if (w->renderer) {
         SDL_DestroyRenderer(w->renderer);
         w->renderer = NULL;
@@ -576,6 +593,9 @@ inline bool pollEvents(void *display, Input *input)
 
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
+#ifdef IMGUI_IMPLEMENTATION
+        ImGui_ImplSDL3_ProcessEvent(&event);
+#endif
         switch (event.type) {
             case SDL_EVENT_QUIT:
             case SDL_EVENT_WINDOW_CLOSE_REQUESTED:

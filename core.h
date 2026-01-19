@@ -45,6 +45,8 @@ typedef struct Window {
     int x, y;
     const char *title;
     uint32_t *buffer;    // Direct pixel buffer for software rendering
+    int bWidth;
+    int bHeight;
     double fps;          // Target frames per second
     double deltat;       // Delta time of last frame in seconds
     timespec lastt;
@@ -85,9 +87,9 @@ void updateFrame(Window_t *w);
 #ifdef SDL_IMPLEMENTATION
 /*  -> Example:
  *  // After drawing to win.buffer
- *  updateFramebuffer(&win, texture, 0.5f); -> 0.5 if you want it downscaled by 1/2 ..
+ *  updateFramebuffer(&win, texture);
  */
-void updateFramebuffer(const Window_t *w, SDL_Texture *texture, float fb_scale);
+void updateFramebuffer(const Window_t *w, SDL_Texture *texture);
 #else
 /*  -> Example:
  *  // After drawing to win.buffer
@@ -157,6 +159,8 @@ inline void windowInit(Window_t *w)
     w->y      = 100;
     w->title  = "DEMO WINDOW";
     w->buffer = NULL;
+    w->bWidth = 800;
+    w->bHeight= 600;
     w->fps    = 60.0;
     w->deltat = 0.0;
     clock_gettime(CLOCK_MONOTONIC, &w->lastt);
@@ -324,14 +328,16 @@ inline void updateFrame(Window_t *w)
     w->lastt  = current_time;
 }
 #ifdef SDL_IMPLEMENTATION
-inline void updateFramebuffer(const Window_t *w, SDL_Texture *texture, float fb_scale)
+inline void updateFramebuffer(const Window_t *w, SDL_Texture *texture)
 {
     if (!w->renderer || !w->buffer || !texture) return;
 
     void* pixels; int pitch;
     SDL_LockTexture(texture, nullptr, &pixels, &pitch);
-    memcpy(pixels, w->buffer, (w->width*fb_scale)*(w->height*fb_scale)*4);
+    memcpy(pixels, w->buffer, w->bWidth*w->bHeight*4);
     SDL_UnlockTexture(texture);
+    SDL_RenderClear(w->renderer);
+    SDL_RenderTexture(w->renderer, texture, nullptr, nullptr);
 #else
 inline void updateFramebuffer(const Window_t *w)
 {

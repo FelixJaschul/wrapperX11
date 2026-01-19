@@ -890,7 +890,7 @@ inline void grabMouse(SDL_Window *window, const int width, const int height, Inp
     input->center_y = height / 2;
     input->grab_window = (void*)window;
 
-    SDL_SetRelativeMouseMode(true);
+    SDL_SetWindowRelativeMouseMode(window, true);
 
     input->mouse_grabbed = true;
     input->mouse_dx = 0;
@@ -899,10 +899,9 @@ inline void grabMouse(SDL_Window *window, const int width, const int height, Inp
 
 inline void releaseMouse(SDL_Window *window, Input *input)
 {
-    (void)window;
     if (!input->mouse_grabbed) return;
 
-    SDL_SetRelativeMouseMode(false);
+    SDL_SetWindowRelativeMouseMode(window, false);
 
     input->mouse_grabbed = false;
     input->mouse_dx = 0;
@@ -1434,8 +1433,8 @@ inline void modelLoad(Model* m, const char* path)
     int vert_capacity = INITIAL_VERTEX_CAPACITY;
     int tri_capacity  = INITIAL_TRIANGLE_CAPACITY;
 
-    Vec3* verts     = malloc(vert_capacity * sizeof(Vec3));
-    Triangle* tris = malloc(tri_capacity * sizeof(Triangle));
+    Vec3* verts     = (Vec3*)malloc(vert_capacity * sizeof(Vec3));
+    Triangle* tris = (Triangle*)malloc(tri_capacity * sizeof(Triangle));
     assert(verts && tris && "Failed to allocate OBJ parsing buffers");
 
     int nv = 0, nt = 0;
@@ -1481,8 +1480,8 @@ inline void modelLoad(Model* m, const char* path)
     fclose(f);
 
     // Allocate exact size for model
-    m->triangles             = malloc(nt * sizeof(Triangle));
-    m->transformed_triangles = malloc(nt * sizeof(Triangle));
+    m->triangles             = (Triangle*)malloc(nt * sizeof(Triangle));
+    m->transformed_triangles = (Triangle*)malloc(nt * sizeof(Triangle));
     assert(m->triangles && m->transformed_triangles && "Failed to allocate model triangles");
 
     memcpy(m->triangles, tris, nt * sizeof(Triangle));

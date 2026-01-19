@@ -82,11 +82,19 @@ void destroyWindow(Window_t *w);
 void updateFrame(Window_t *w);
 
 // Push pixel buffer to screen
+#ifdef SDL_IMPLEMENTATION
+/*  -> Example:
+ *  // After drawing to win.buffer
+ *  updateFramebuffer(&win, texture, 0.5f); -> 0.5 if you want it downscaled by 1/2 ..
+ */
+void updateFramebuffer(const Window_t *w, SDL_Texture *texture, float fb_scale);
+#else
 /*  -> Example:
  *  // After drawing to win.buffer
  *  updateFramebuffer(&win);
  */
 void updateFramebuffer(const Window_t *w);
+#endif
 
 // Get current FPS based on actual frame time
 /*  -> Example:
@@ -315,39 +323,18 @@ inline void updateFrame(Window_t *w)
     w->deltat = elapsed;
     w->lastt  = current_time;
 }
+#ifdef SDL_IMPLEMENTATION
+inline void updateFramebuffer(const Window_t *w, SDL_Texture *texture, float fb_scale)
+{
+    if (!w->renderer || !w->buffer || !texture) return;
 
+    void* pixels; int pitch;
+    SDL_LockTexture(texture, nullptr, &pixels, &pitch);
+    memcpy(pixels, w->buffer, (w->width*fb_scale)*(w->height*fb_scale)*4);
+    SDL_UnlockTexture(texture);
+#else
 inline void updateFramebuffer(const Window_t *w)
 {
-#ifdef SDL_IMPLEMENTATION
-    if (!w->renderer || !w->buffer) return;
-
-    SDL_Texture *tex = SDL_CreateTexture(
-        w->renderer,
-        SDL_PIXELFORMAT_ARGB8888,
-        SDL_TEXTUREACCESS_STREAMING,
-        w->width,
-        w->height
-    );
-    if (!tex) return;
-
-    void *pixels = NULL;
-    int pitch   = 0;
-    if (SDL_LockTexture(tex, NULL, &pixels, &pitch) == 0) {
-        uint8_t *dst = (uint8_t*)pixels;
-        const uint8_t *src = (const uint8_t*)w->buffer;
-        const int row_bytes = w->width * 4;
-        for (int y = 0; y < w->height; ++y) {
-            memcpy(dst + y * pitch, src + y * row_bytes, row_bytes);
-        }
-        SDL_UnlockTexture(tex);
-    }
-
-    SDL_RenderClear(w->renderer);
-    SDL_RenderTexture(w->renderer, tex, NULL, NULL);
-    SDL_RenderPresent(w->renderer);
-
-    SDL_DestroyTexture(tex);
-#else
     XPutImage(w->display, w->window, w->gc, w->image,
               0, 0, 0, 0, w->width, w->height);
     XFlush(w->display);

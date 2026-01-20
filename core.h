@@ -499,7 +499,7 @@ void inputInit(Input *input);
 // Returns true if window should close
 // NOTE: This automatically calls updateInput() at the end, so you don't need to call it manually
 #ifdef SDL_IMPLEMENTATION
-bool pollEvents(Window_t *win, Input *input)
+bool pollEvents(Window_t *win, Input *input);
 #else
 bool pollEvents(Window_t *win, Input *input);
 #endif

@@ -431,6 +431,7 @@ inline void setVSync(Window_t *w, bool enable)
 #endif // CORE_IMPLEMENTATION
 #endif // WRAPPER_CORE_H
 
+
 // ============================================================================
 // Keyboard and Mouse Input (X11 or SDL3 backend)
 // ============================================================================
@@ -998,6 +999,7 @@ inline bool isMouseGrabbed(const Input *input)
 #endif // KEYS_IMPLEMENTATION
 #endif // WRAPPER_KEYS_H
 
+
 // ============================================================================
 // Vector math
 // ============================================================================
@@ -1173,6 +1175,7 @@ inline Vec3 reflect(const Vec3 v, const Vec3 n)
 #endif // MATH_IMPLEMENTATION
 #endif // WRAPPER_MATH_H
 
+
 #ifndef WRAPPER_CAMERA_H
 #define WRAPPER_CAMERA_H
 
@@ -1296,6 +1299,7 @@ inline Ray cameraGetRay(const Camera* cam, const float u_scaled, const float v_s
 #endif // CAMERA_IMPLEMENTATION
 #endif // WRAPPER_CAMERA_H
 
+
 // ============================================================================
 // 3D model with materials and transforms
 // ============================================================================
@@ -1319,6 +1323,7 @@ typedef struct {
 // Triangle primitive for meshes
 typedef struct {
     Vec3 v0, v1, v2;
+    Vec3 color;
 } Triangle;
 
 // 3D model with transform and material
@@ -1559,33 +1564,33 @@ typedef struct {
     DepthBuffer depth;
     bool wireframe;
     bool backface_culling;
-    Vec3 light_dir; // Directional light (normalized)
-} Renderer3D;
+    Vec3 light_dir;
+} Renderer;
 
 // Initialize 3D renderer
 /*  -> Example:
- *  Renderer3D renderer;
- *  render3DInit(&renderer, &window, &camera);
+ *  Renderer renderer;
+ *  renderInit(&renderer, &window, &camera);
  */
-void render3DInit(Renderer3D* r, Window_t* win, Camera* cam);
+void renderInit(Renderer* r, Window_t* win, Camera* cam);
 
 // Free 3D renderer resources
-void render3DFree(Renderer3D* r);
+void renderFree(Renderer* r);
 
 // Clear depth buffer
-void render3DClear(Renderer3D* r);
+void renderClear(Renderer* r);
 
 // Render a single model
 /*  -> Example:
- *  render3DModel(&renderer, &cube_model);
+ *  renderModel(&renderer, &cube_model);
  */
-void render3DModel(Renderer3D* r, const Model* m);
+void renderModel(Renderer* r, const Model* m);
 
 // Render array of models
 /*  -> Example:
- *  render3DScene(&renderer, scene_models, num_models);
+ *  renderScene(&renderer, scene_models, num_models);
  */
-void render3DScene(Renderer3D* r, const Model* models, int count);
+void renderScene(Renderer* r, const Model* models, int count);
 
 #ifdef __cplusplus
 }
@@ -1601,7 +1606,8 @@ typedef struct {
 } Mat4;
 
 // Create perspective projection matrix
-static inline Mat4 perspective(float fov, float aspect, float near, float far) {
+static inline Mat4 _perspective(float fov, float aspect, float near, float far)
+{
     Mat4 mat = {0};
     const float tan_half_fov = tanf(fov * 0.5f * M_PI / 180.0f);
     mat.m[0] = 1.0f / (aspect * tan_half_fov);
@@ -1613,7 +1619,8 @@ static inline Mat4 perspective(float fov, float aspect, float near, float far) {
 }
 
 // Create view matrix from camera
-static inline Mat4 lookAt(Vec3 eye, Vec3 target, Vec3 up) {
+static inline Mat4 _lookAt(Vec3 eye, Vec3 target, Vec3 up)
+{
     Mat4 mat = {0};
     const Vec3 f = norm(sub(target, eye));
     const Vec3 r = norm(cross(f, up));
@@ -1627,7 +1634,8 @@ static inline Mat4 lookAt(Vec3 eye, Vec3 target, Vec3 up) {
 }
 
 // Multiply matrix by vector (w=1)
-static inline Vec3 mat4_mul_vec3(const Mat4* m, Vec3 v, float* w_out) {
+static inline Vec3 _mat4_mul_vec3(const Mat4* m, Vec3 v, float* w_out)
+{
     const float x = m->m[0]*v.x + m->m[4]*v.y + m->m[8]*v.z  + m->m[12];
     const float y = m->m[1]*v.x + m->m[5]*v.y + m->m[9]*v.z  + m->m[13];
     const float z = m->m[2]*v.x + m->m[6]*v.y + m->m[10]*v.z + m->m[14];
@@ -1637,7 +1645,8 @@ static inline Vec3 mat4_mul_vec3(const Mat4* m, Vec3 v, float* w_out) {
 }
 
 // Multiply two matrices
-static inline Mat4 mat4_mul(const Mat4* a, const Mat4* b) {
+static inline Mat4 _mat4_mul(const Mat4* a, const Mat4* b)
+{
     Mat4 r = {0};
     for (int i = 0; i < 4; i++) {
         for (int j = 0; j < 4; j++) {
@@ -1652,20 +1661,22 @@ static inline Mat4 mat4_mul(const Mat4* a, const Mat4* b) {
 }
 
 // Convert to screen space
-static inline void to_screen(Vec3* v, int width, int height) {
+static inline void _to_screen(Vec3* v, int width, int height)
+{
     v->x = (v->x + 1.0f) * 0.5f * width;
     v->y = (1.0f - v->y) * 0.5f * height;
 }
 
 // Simple lighting calculation
-static inline float calculate_lighting(Vec3 normal, Vec3 light_dir) {
-    const float ambient = 0.3f;
+static inline float _calculate_lighting(Vec3 normal, Vec3 light_dir)
+{
     const float diffuse = fmaxf(0.0f, -dot(normal, light_dir));
-    return fminf(1.0f, ambient + diffuse * 0.7f);
+    return fminf(1.0f, diffuse);
 }
 
 // Convert float color to uint32
-static inline uint32_t vec3_to_color(Vec3 c, float brightness) {
+static inline uint32_t _vec3_to_color(Vec3 c, float brightness)
+{
     const int r = (int)(fminf(1.0f, c.x * brightness) * 255.0f);
     const int g = (int)(fminf(1.0f, c.y * brightness) * 255.0f);
     const int b = (int)(fminf(1.0f, c.z * brightness) * 255.0f);
@@ -1673,7 +1684,8 @@ static inline uint32_t vec3_to_color(Vec3 c, float brightness) {
 }
 
 // Draw line using Bresenham's algorithm
-static inline void draw_line(Window_t* w, int x0, int y0, int x1, int y1, uint32_t color) {
+static inline void _draw_line(Window_t* w, int x0, int y0, int x1, int y1, uint32_t color)
+{
     const int dx = abs(x1 - x0);
     const int dy = abs(y1 - y0);
     const int sx = x0 < x1 ? 1 : -1;
@@ -1690,10 +1702,8 @@ static inline void draw_line(Window_t* w, int x0, int y0, int x1, int y1, uint32
 }
 
 // Fill triangle with flat top/bottom optimization
-static inline void fill_triangle(Window_t* w, DepthBuffer* db,
-                                 Vec3 v0, Vec3 v1, Vec3 v2,
-                                 float z0, float z1, float z2,
-                                 uint32_t color) {
+static inline void _fill_triangle(Window_t* w, DepthBuffer* db, Vec3 v0, Vec3 v1, Vec3 v2, float z0, float z1, float z2, uint32_t color)
+{
     // Sort vertices by y-coordinate (v0.y <= v1.y <= v2.y)
     if (v0.y > v1.y) { Vec3 tmp = v0; v0 = v1; v1 = tmp; float tz = z0; z0 = z1; z1 = tz; }
     if (v1.y > v2.y) { Vec3 tmp = v1; v1 = v2; v2 = tmp; float tz = z1; z1 = z2; z2 = tz; }
@@ -1749,7 +1759,8 @@ static inline void fill_triangle(Window_t* w, DepthBuffer* db,
     }
 }
 
-inline void render3DInit(Renderer3D* r, Window_t* win, Camera* cam) {
+inline void renderInit(Renderer* r, Window_t* win, Camera* cam)
+{
     r->window = win;
     r->camera = cam;
     r->wireframe = false;
@@ -1762,11 +1773,12 @@ inline void render3DInit(Renderer3D* r, Window_t* win, Camera* cam) {
     r->depth.valid = (r->depth.depths != NULL);
 
     if (r->depth.valid) {
-        render3DClear(r);
+        renderClear(r);
     }
 }
 
-inline void render3DFree(Renderer3D* r) {
+inline void renderFree(Renderer* r)
+{
     if (r->depth.depths) {
         free(r->depth.depths);
         r->depth.depths = NULL;
@@ -1774,7 +1786,8 @@ inline void render3DFree(Renderer3D* r) {
     r->depth.valid = false;
 }
 
-inline void render3DClear(Renderer3D* r) {
+inline void renderClear(Renderer* r)
+{
     if (!r->depth.valid) return;
     const int size = r->depth.width * r->depth.height;
     for (int i = 0; i < size; i++) {
@@ -1783,89 +1796,56 @@ inline void render3DClear(Renderer3D* r) {
     }
 }
 
-inline void render3DModel(Renderer3D* r, const Model* m) {
+inline void renderModel(Renderer* r, const Model* m)
+{
+    // one Color for whole Model -> support lighting
     if (!r->depth.valid || !m || m->num_triangles == 0) return;
 
-    // Build view matrix directly from camera vectors
     Mat4 view = {0};
-    view.m[0] = r->camera->right.x;
-    view.m[4] = r->camera->right.y;
-    view.m[8] = r->camera->right.z;
-    view.m[12] = -dot(r->camera->right, r->camera->position);
-
-    view.m[1] = r->camera->up.x;
-    view.m[5] = r->camera->up.y;
-    view.m[9] = r->camera->up.z;
-    view.m[13] = -dot(r->camera->up, r->camera->position);
-
-    view.m[2] = -r->camera->front.x;
-    view.m[6] = -r->camera->front.y;
-    view.m[10] = -r->camera->front.z;
-    view.m[14] = dot(r->camera->front, r->camera->position);
-
+    view.m[0] = r->camera->right.x;   view.m[4] = r->camera->right.y;   view.m[8] = r->camera->right.z;   view.m[12] = -dot(r->camera->right, r->camera->position);
+    view.m[1] = r->camera->up.x;      view.m[5] = r->camera->up.y;      view.m[9] = r->camera->up.z;      view.m[13] = -dot(r->camera->up, r->camera->position);
+    view.m[2] = -r->camera->front.x;  view.m[6] = -r->camera->front.y;  view.m[10] = -r->camera->front.z; view.m[14] = dot(r->camera->front, r->camera->position);
     view.m[15] = 1.0f;
 
     const float aspect = (float)r->window->bWidth / (float)r->window->bHeight;
-    const Mat4 proj = perspective(r->camera->fov, aspect, 0.1f, 1000.0f);
+    const Mat4 proj = _perspective(r->camera->fov, aspect, 0.1f, 1000.0f);
+    const Mat4 vp = _mat4_mul(&proj, &view);
 
-    const Mat4 vp = mat4_mul(&proj, &view);
-
-    // Render each triangle
-    for (int i = 0; i < m->num_triangles; i++) {
+    for (int i = 0; i < m->num_triangles; i++)
+    {
         const Triangle* tri = &m->transformed_triangles[i];
 
-        // Transform vertices to clip space
         float w0, w1, w2;
-        Vec3 c0 = mat4_mul_vec3(&vp, tri->v0, &w0);
-        Vec3 c1 = mat4_mul_vec3(&vp, tri->v1, &w1);
-        Vec3 c2 = mat4_mul_vec3(&vp, tri->v2, &w2);
+        Vec3 c0 = _mat4_mul_vec3(&vp, tri->v0, &w0);
+        Vec3 c1 = _mat4_mul_vec3(&vp, tri->v1, &w1);
+        Vec3 c2 = _mat4_mul_vec3(&vp, tri->v2, &w2);
 
-        // Clip triangles completely behind camera
-        if (w0 <= 0.0f && w1 <= 0.0f && w2 <= 0.0f) continue;
-
-        // Skip if any vertex is behind camera (simple clipping)
         if (w0 <= 0.0f || w1 <= 0.0f || w2 <= 0.0f) continue;
 
-        // Perspective divide
         c0 = vdiv(c0, w0);
         c1 = vdiv(c1, w1);
         c2 = vdiv(c2, w2);
 
-        // Backface culling
-        if (r->backface_culling) {
-            const Vec3 edge1 = sub(c1, c0);
-            const Vec3 edge2 = sub(c2, c0);
-            const float cross_z = edge1.x * edge2.y - edge1.y * edge2.x;
-            if (cross_z <= 0.0f) continue;
-        }
+        if (r->backface_culling) if (sub(c1, c0).x * sub(c2, c0).y - sub(c1, c0).y * sub(c2, c0).x <= 0.0f) continue;
 
-        // Store depth for interpolation
         const float z0 = c0.z, z1 = c1.z, z2 = c2.z;
+        _to_screen(&c0, r->window->bWidth, r->window->bHeight);
+        _to_screen(&c1, r->window->bWidth, r->window->bHeight);
+        _to_screen(&c2, r->window->bWidth, r->window->bHeight);
 
-        // Convert to screen coordinates
-        to_screen(&c0, r->window->bWidth, r->window->bHeight);
-        to_screen(&c1, r->window->bWidth, r->window->bHeight);
-        to_screen(&c2, r->window->bWidth, r->window->bHeight);
+        // Apply lighting to per-triangle base color
+        const Vec3 normal = norm(vdiv(add(add(tri->v0, tri->v1), tri->v2), 3.0f));
+        const float brightness = fmaxf(0.0f, -dot(normal, r->light_dir));
+        const Vec3 lit_color = mul(tri->color, brightness); // component-wise multiply
+        const uint32_t color = _vec3_to_color(lit_color, 1.0f);
 
-        // Calculate lighting
-        const Vec3 normal = norm(cross(sub(tri->v1, tri->v0), sub(tri->v2, tri->v0)));
-        const float brightness = calculate_lighting(normal, r->light_dir);
-        const uint32_t color = vec3_to_color(m->mat.color, brightness);
-
-        if (r->wireframe) {
-            draw_line(r->window, (int)c0.x, (int)c0.y, (int)c1.x, (int)c1.y, color);
-            draw_line(r->window, (int)c1.x, (int)c1.y, (int)c2.x, (int)c2.y, color);
-            draw_line(r->window, (int)c2.x, (int)c2.y, (int)c0.x, (int)c0.y, color);
-        } else {
-            fill_triangle(r->window, &r->depth, c0, c1, c2, z0, z1, z2, color);
-        }
+        _fill_triangle(r->window, &r->depth, c0, c1, c2, z0, z1, z2, color);
     }
 }
 
-inline void render3DScene(Renderer3D* r, const Model* models, int count) {
-    for (int i = 0; i < count; i++) {
-        render3DModel(r, &models[i]);
-    }
+inline void renderScene(Renderer* r, const Model* models, int count)
+{
+    for (int i = 0; i < count; i++) renderModel(r, &models[i]);
 }
 
 #endif // RENDER3D_IMPLEMENTATION

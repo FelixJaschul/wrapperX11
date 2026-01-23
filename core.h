@@ -1564,6 +1564,7 @@ typedef struct {
     DepthBuffer depth;
     bool wireframe;
     bool backface_culling;
+    bool light;
     Vec3 light_dir;
 } Renderer;
 
@@ -1835,7 +1836,8 @@ inline void renderModel(Renderer* r, const Model* m)
 
         // Apply lighting to per-triangle base color
         const Vec3 normal = norm(vdiv(add(add(tri->v0, tri->v1), tri->v2), 3.0f));
-        const float brightness = fmaxf(0.0f, -dot(normal, r->light_dir));
+        float brightness = 1.0f;
+        if (r->light) brightness = fmaxf(0.0f, -dot(normal, r->light_dir));
         const Vec3 lit_color = mul(tri->color, brightness); // component-wise multiply
         const uint32_t color = _vec3_to_color(lit_color, 1.0f);
 

@@ -29,6 +29,13 @@
 extern "C" {
 #endif
 
+#ifdef SDL_IMPLEMENTATION
+#define ASSERT(x) do { if(!(x)) { std::cout << "Error: " << #x << " " << SDL_GetError() << std::endl ; exit(1); } } while(0)
+#else
+#define ASSERT(x) do { if(!(x)) { std::cout << "Error: " << #x << " " << std::endl; exit(1); } } while(0)
+#endif
+#define LOG(x) do { std::cout << x << std::endl; } while(0)
+
 typedef struct Window {
 #ifdef SDL_IMPLEMENTATION
     SDL_Window   *window;
@@ -565,7 +572,7 @@ inline void inputInit(Input *input)
 
 #ifdef SDL_IMPLEMENTATION
 
-inline inline bool pollEvents(Window_t *win, Input *input)
+inline bool pollEvents(Window_t *win, Input *input)
 {
     bool shouldClose = false;
 
@@ -1772,6 +1779,7 @@ inline void render3DClear(Renderer3D* r) {
     const int size = r->depth.width * r->depth.height;
     for (int i = 0; i < size; i++) {
         r->depth.depths[i] = FLT_MAX;
+        r->window->buffer[i] = 0x000000;
     }
 }
 

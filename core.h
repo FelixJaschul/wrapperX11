@@ -30,11 +30,11 @@ extern "C" {
 #endif
 
 #ifdef SDL_IMPLEMENTATION
-#define ASSERT(x) do { if(!(x)) { std::cout << "Error: " << #x << " " << SDL_GetError() << std::endl ; exit(1); } } while(0)
+#define ASSERT(x) do { if(!(x)) { fprintf(stderr, "Error: %s %s\n", #x, SDL_GetError()); exit(1); } } while(0)
 #else
-#define ASSERT(x) do { if(!(x)) { std::cout << "Error: " << #x << " " << std::endl; exit(1); } } while(0)
+#define ASSERT(x) do { if(!(x)) { fprintf(stderr, "Error: %s\n", #x); exit(1); } } while(0)
 #endif
-#define LOG(x) do { std::cout << x << std::endl; } while(0)
+#define LOG(x) do { fprintf(stderr, "%s\n", x); } while(0)
 
 typedef struct Window {
 #ifdef SDL_IMPLEMENTATION

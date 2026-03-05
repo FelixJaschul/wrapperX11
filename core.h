@@ -74,13 +74,55 @@ typedef struct Window {
 
 typedef struct Camera Camera;
 
+// Initialize window structure with default values
+/*  -> Example:
+ *  Window_t win;
+ *  windowInit(&win);
+ *  win.width = 800;
+ *  win.height = 600;
+ */
 void windowInit(Window_t *w);
+
+// Create window and renderer (or X11 window)
+/*  -> Example:
+ *  ASSERT(createWindow(&win));
+ */
 bool createWindow(Window_t *w);
+
+// Destroy window and free resources
+/*  -> Example:
+ *  destroyWindow(&win);
+ */
 void destroyWindow(Window_t *w);
+
+// Cap frame rate and update delta time
+/*  -> Example:
+ *  updateFrame(&win);
+ */
 void updateFrame(Window_t *w);
+
+// Get current FPS
+/*  -> Example:
+ *  double fps = getFPS(&win);
+ */
 double getFPS(const Window_t *w);
+
+// Get delta time between frames
+/*  -> Example:
+ *  double dt = getDelta(&win);
+ */
 double getDelta(const Window_t *w);
+
+// Draw a single pixel to the buffer
+/*  -> Example:
+ *  drawPixel(&win, x, y, 0xFFFFFFFF);
+ */
 void drawPixel(const Window_t *w, int x, int y, uint32_t color);
+
+// Enable/disable VSync (SDL only)
+/*  -> Example:
+ *  setVSync(&win, true);
+ */
 void setVSync(Window_t *w, bool enable);
 
 #ifdef SDL_IMPLEMENTATION
@@ -91,119 +133,148 @@ typedef struct {
     float clear_r, clear_g, clear_b, clear_a;
 } Gpu;
 
+// Initialize GPU state struct with default values
+/*  -> Example:
+ *  Gpu gpu;
+ *  gpuInitState(&gpu);
+ */
 void gpuInitState(Gpu *gpu);
+
+// Initialize GPU device and claim window
+/*  -> Example:
+ *  ASSERT(gpuInit(&gpu, &win));
+ */
 bool gpuInit(Gpu *gpu, Window_t *window);
+
+// Free GPU device and release window
+/*  -> Example:
+ *  gpuFree(&gpu);
+ */
 void gpuFree(Gpu *gpu);
+
+// Set clear color for GPU rendering
+/*  -> Example:
+ *  gpuSetClearColor(&gpu, 0.0f, 0.0f, 0.0f, 1.0f);
+ */
 void gpuSetClearColor(Gpu *gpu, float r, float g, float b, float a);
+
+// Create graphics pipeline with vertex/fragment uniform buffers
+/*  -> Example:
+ *  SDL_GPUGraphicsPipeline *pipeline = gpuCreatePipeline(&gpu, "shader_name", 0, 1);
+ */
 SDL_GPUGraphicsPipeline *gpuCreatePipeline(Gpu *gpu, const char *shader_base_name, Uint32 vertex_uniform_buffers, Uint32 fragment_uniform_buffers);
+
+// Create graphics pipeline with extended sampler/storage options
+/*  -> Example:
+ *  SDL_GPUGraphicsPipeline *pipeline = gpuCreatePipelineEx(&gpu, "shader_name", 1, 0, 0, 0, 0, 0, 0, 1);
+ */
 SDL_GPUGraphicsPipeline *gpuCreatePipelineEx(Gpu *gpu, const char *shader_base_name, Uint32 vertex_samplers, Uint32 vertex_storage_textures, Uint32 vertex_storage_buffers, Uint32 vertex_uniform_buffers, Uint32 fragment_samplers, Uint32 fragment_storage_textures, Uint32 fragment_storage_buffers, Uint32 fragment_uniform_buffers);
+
+// Release and nullify graphics pipeline
+/*  -> Example:
+ *  gpuReleasePipeline(&gpu, &pipeline);
+ */
 void gpuReleasePipeline(Gpu *gpu, SDL_GPUGraphicsPipeline **pipeline);
+
+// Get drawable size for swapchain
+/*  -> Example:
+ *  int width, height;
+ *  gpuGetDrawableSize(&gpu, &width, &height);
+ */
 bool gpuGetDrawableSize(const Gpu *gpu, int *out_width, int *out_height);
-bool gpuRenderPipeline( Gpu *gpu, SDL_GPUGraphicsPipeline *pipeline, const void *vertex_uniform_data, Uint32 vertex_uniform_size, const void *frag_uniform_data, Uint32 frag_uniform_size, Uint32 vertex_count);
+
+// Render primitives with uniform data
+/*  -> Example:
+ *  gpuRenderPipeline(&gpu, pipeline, &uniforms, sizeof(uniforms), NULL, 0, 3);
+ */
+bool gpuRenderPipeline(Gpu *gpu, SDL_GPUGraphicsPipeline *pipeline, const void *vertex_uniform_data, Uint32 vertex_uniform_size, const void *frag_uniform_data, Uint32 frag_uniform_size, Uint32 vertex_count);
 #endif
 
 #if defined(IMGUI_IMPLEMENTATION) && defined(SDL_IMPLEMENTATION)
-// Unified ImGui initialization - automatically chooses backend based on GPU_IMPLEMENTATION
+// Initialize ImGui context and backend (GPU or SDL_Renderer based on GPU_IMPLEMENTATION)
+/*  -> Example:
+ *  // GPU mode (call AFTER gpuInit):
+ *  imguiInit(&win, gpu.device, SDL_GetGPUSwapchainTextureFormat(gpu.device, win.window));
+ *  
+ *  // CPU mode (call AFTER createWindow):
+ *  imguiInit(&win, win.renderer);
+ */
 #ifdef GPU_IMPLEMENTATION
-inline void imguiInit(SDL_Window *window, SDL_GPUDevice *device, SDL_GPUTextureFormat color_target_format)
-{
-    IMGUI_CHECKVERSION();
-    ImGui::CreateContext();
-    ImGui::StyleColorsDark();
-    ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
-    ImGui_ImplSDL3_InitForSDLGPU(window);
-    ImGui_ImplSDLGPU3_InitInfo info = {};
-    info.Device = device;
-    info.ColorTargetFormat = color_target_format;
-    info.MSAASamples = SDL_GPU_SAMPLECOUNT_1;
-    ImGui_ImplSDLGPU3_Init(&info);
-}
+void imguiInit(Window_t *w, SDL_GPUDevice *device, SDL_GPUTextureFormat color_target_format);
 #else
-inline void imguiInit(SDL_Window *window, SDL_Renderer *renderer)
-{
-    IMGUI_CHECKVERSION();
-    ImGui::CreateContext();
-    ImGui::StyleColorsDark();
-    ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
-    ImGui_ImplSDL3_InitForSDLRenderer(window, renderer);
-    ImGui_ImplSDLRenderer3_Init(renderer);
-}
+void imguiInit(Window_t *w, SDL_Renderer *renderer);
 #endif
 
-inline void imguiFree()
-{
-#ifdef GPU_IMPLEMENTATION
-    ImGui_ImplSDLGPU3_Shutdown();
-#else
-    ImGui_ImplSDLRenderer3_Shutdown();
-#endif
-    ImGui_ImplSDL3_Shutdown();
-    ImGui::DestroyContext();
-}
+// Shutdown ImGui and free resources
+/*  -> Example:
+ *  imguiFree();
+ */
+void imguiFree();
+
+// Begin ImGui frame (call at start of each frame before building UI)
+/*  -> Example:
+ *  imguiNewFrame();
+ *  ImGui::Begin("Window");
+ *  // ... build UI ...
+ */
+void imguiNewFrame();
+
+// End ImGui frame and submit draw data (CPU: renders immediately, GPU: call ImGui::Render() manually)
+/*  -> Example:
+ *  // CPU mode:
+ *  imguiEndFrame(&win);
+ *  
+ *  // GPU mode:
+ *  imguiNewFrame();
+ *  // ... build UI ...
+ *  ImGui::Render();
+ *  // ... use imguiPrepareDrawData() and imguiRenderDrawData() in render passes ...
+ */
+void imguiEndFrame(Window_t *w);
+
+// Prepare ImGui draw data for GPU rendering (call before render passes, GPU mode only)
+/*  -> Example:
+ *  SDL_GPUCommandBuffer *cmd = SDL_AcquireGPUCommandBuffer(gpu.device);
+ *  imguiPrepareDrawData(cmd);
+ *  // ... render passes ...
+ */
+void imguiPrepareDrawData(SDL_GPUCommandBuffer *cmd);
+
+// Render ImGui draw data in a GPU render pass (GPU mode only)
+/*  -> Example:
+ *  SDL_GPURenderPass *pass = SDL_BeginGPURenderPass(cmd, &t, 1, NULL);
+ *  imguiRenderDrawData(cmd, pass);
+ *  SDL_EndGPURenderPass(pass);
+ */
+void imguiRenderDrawData(SDL_GPUCommandBuffer *cmd, SDL_GPURenderPass *pass);
 #endif
 
 // Internal buffer management
+
+// Resize buffer to current window size
+/*  -> Example:
+ *  resizeBuffer(&win);
+ */
 bool resizeBuffer(Window_t *w);
+
+// Free buffer memory
+/*  -> Example:
+ *  freeBuffer(&win);
+ */
 void freeBuffer(Window_t *w);
 
 #ifdef SDL_IMPLEMENTATION
+// Update framebuffer texture from buffer
+/*  -> Example:
+ *  updateFramebuffer(&win, texture);
+ */
 bool updateFramebuffer(const Window_t *w, SDL_Texture *texture);
 #else
+// Update framebuffer (X11 - direct blit)
+/*  -> Example:
+ *  updateFramebuffer(&win);
+ */
 bool updateFramebuffer(const Window_t *w);
-#endif
-
-#if defined(SDL_IMPLEMENTATION) && defined(IMGUI_IMPLEMENTATION)
-// ImGui helpers - automatically chooses backend based on GPU_IMPLEMENTATION
-#ifdef GPU_IMPLEMENTATION
-// ImGui + SDL + GPU: Use SDL_GPU3 ImGui backend
-inline void imguiNewFrame()
-{
-    ImGui_ImplSDLGPU3_NewFrame();
-    ImGui_ImplSDL3_NewFrame();
-    ImGui::NewFrame();
-}
-
-inline void imguiEndFrame(Window_t *w)
-{
-    (void)w;
-    ImGui::Render();
-}
-
-// Prepare ImGui draw data before render pass (copy vertex/index buffers)
-inline void imguiPrepareDrawData(SDL_GPUCommandBuffer *cmd)
-{
-    ImGui_ImplSDLGPU3_PrepareDrawData(ImGui::GetDrawData(), cmd);
-}
-
-// Render ImGui draw data in a render pass
-inline void imguiRenderDrawData(SDL_GPUCommandBuffer *cmd, SDL_GPURenderPass *pass)
-{
-    ImGui_ImplSDLGPU3_RenderDrawData(ImGui::GetDrawData(), cmd, pass);
-}
-#else
-// ImGui + SDL (no GPU): Use SDL_Renderer ImGui backend
-inline void imguiNewFrame()
-{
-    ImGui_ImplSDLRenderer3_NewFrame();
-    ImGui_ImplSDL3_NewFrame();
-    ImGui::NewFrame();
-}
-
-inline void imguiEndFrame(Window_t *w)
-{
-    ImGui::Render();
-    ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), w->renderer);
-}
-
-#define imguiPrepareDrawData(cmd) do { (void)(cmd); } while(0)
-#define imguiRenderDrawData(cmd, pass) do { (void)(cmd); (void)(pass); } while(0)
-#endif
-#else
-// No ImGui or no SDL
-#define imguiNewFrame() do {} while(0)
-#define imguiEndFrame(w) do {} while(0)
-#define imguiPrepareDrawData(cmd) do { (void)(cmd); } while(0)
-#define imguiRenderDrawData(cmd, pass) do { (void)(cmd); (void)(pass); } while(0)
 #endif
 
 #ifdef __cplusplus
@@ -338,7 +409,7 @@ inline bool createWindow(Window_t *w)
     }
 
 #if defined(IMGUI_IMPLEMENTATION) && !defined(GPU_IMPLEMENTATION)
-    imguiInit(w->window, w->renderer);
+    imguiInit(w, w->renderer);
 #endif
     // Note: When GPU_IMPLEMENTATION is defined, call imguiInit() manually AFTER gpuInit()
 
@@ -435,6 +506,83 @@ inline void destroyWindow(Window_t *w)
     w->display = NULL;
 #endif
 }
+
+#if defined(IMGUI_IMPLEMENTATION) && defined(SDL_IMPLEMENTATION)
+#ifdef GPU_IMPLEMENTATION
+inline void imguiInit(Window_t *w, SDL_GPUDevice *device, SDL_GPUTextureFormat color_target_format)
+{
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGui::StyleColorsDark();
+    ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+    ImGui_ImplSDL3_InitForSDLGPU(w->window);
+    ImGui_ImplSDLGPU3_InitInfo info = {};
+    info.Device = device;
+    info.ColorTargetFormat = color_target_format;
+    info.MSAASamples = SDL_GPU_SAMPLECOUNT_1;
+    ImGui_ImplSDLGPU3_Init(&info);
+}
+#else
+inline void imguiInit(Window_t *w, SDL_Renderer *renderer)
+{
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGui::StyleColorsDark();
+    ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+    ImGui_ImplSDL3_InitForSDLRenderer(w->window, renderer);
+    ImGui_ImplSDLRenderer3_Init(renderer);
+}
+#endif
+
+inline void imguiFree()
+{
+#ifdef GPU_IMPLEMENTATION
+    ImGui_ImplSDLGPU3_Shutdown();
+#else
+    ImGui_ImplSDLRenderer3_Shutdown();
+#endif
+    ImGui_ImplSDL3_Shutdown();
+    ImGui::DestroyContext();
+}
+
+inline void imguiNewFrame()
+{
+#ifdef GPU_IMPLEMENTATION
+    ImGui_ImplSDLGPU3_NewFrame();
+#else
+    ImGui_ImplSDLRenderer3_NewFrame();
+#endif
+    ImGui_ImplSDL3_NewFrame();
+    ImGui::NewFrame();
+}
+
+inline void imguiEndFrame(Window_t *w)
+{
+    ImGui::Render();
+#ifndef GPU_IMPLEMENTATION
+    ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), w->renderer);
+#endif
+}
+
+inline void imguiPrepareDrawData(SDL_GPUCommandBuffer *cmd)
+{
+#ifdef GPU_IMPLEMENTATION
+    ImGui_ImplSDLGPU3_PrepareDrawData(ImGui::GetDrawData(), cmd);
+#else
+    (void)cmd;
+#endif
+}
+
+inline void imguiRenderDrawData(SDL_GPUCommandBuffer *cmd, SDL_GPURenderPass *pass)
+{
+#ifdef GPU_IMPLEMENTATION
+    ImGui_ImplSDLGPU3_RenderDrawData(ImGui::GetDrawData(), cmd, pass);
+#else
+    (void)cmd;
+    (void)pass;
+#endif
+}
+#endif
 
 inline void updateFrame(Window_t *w)
 {

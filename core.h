@@ -1162,6 +1162,10 @@ bool pollEvents(Window_t *win, Input *input);
 // Copy current to previous - ONLY call manually if not using pollEvents
 void updateInput(Input *input);
 
+// This is just the same for everything
+/*
+ * if (isKeyDown(&state.input, KEY_W)) cameraMove(&state.cam, state.cam.front, state.move_speed);
+ */
 bool isKeyDown(const Input *input, Key key);
 bool isKeyPressed(const Input *input, Key key);
 bool isKeyReleased(const Input *input, Key key);

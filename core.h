@@ -18,7 +18,11 @@
     #ifdef IMGUI_IMPLEMENTATION
         #include <imgui.h>
         #include <imgui_impl_sdl3.h>
-        #include <imgui_impl_sdlrenderer3.h>
+        #ifdef GPU_IMPLEMENTATION
+            #include <imgui_impl_sdlgpu3.h>
+        #else
+            #include <imgui_impl_sdlrenderer3.h>
+        #endif
     #endif
 #else
     #include <X11/Xlib.h>
@@ -98,6 +102,46 @@ bool gpuGetDrawableSize(const Gpu *gpu, int *out_width, int *out_height);
 bool gpuRenderPipeline( Gpu *gpu, SDL_GPUGraphicsPipeline *pipeline, const void *vertex_uniform_data, Uint32 vertex_uniform_size, const void *frag_uniform_data, Uint32 frag_uniform_size, Uint32 vertex_count);
 #endif
 
+#if defined(IMGUI_IMPLEMENTATION) && defined(SDL_IMPLEMENTATION)
+// Unified ImGui initialization - automatically chooses backend based on GPU_IMPLEMENTATION
+#ifdef GPU_IMPLEMENTATION
+inline void imguiInit(SDL_Window *window, SDL_GPUDevice *device, SDL_GPUTextureFormat color_target_format, SDL_GPUTextureMSAASamples msaa_samples)
+{
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGui::StyleColorsDark();
+    ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+    ImGui_ImplSDL3_InitForSDLGPU(window);
+    ImGui_ImplSDLGPU3_InitInfo info = {};
+    info.Device = device;
+    info.ColorTargetFormat = color_target_format;
+    info.MSAASamples = msaa_samples;
+    ImGui_ImplSDLGPU3_Init(&info);
+}
+#else
+inline void imguiInit(SDL_Window *window, SDL_Renderer *renderer)
+{
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGui::StyleColorsDark();
+    ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+    ImGui_ImplSDL3_InitForSDLRenderer(window, renderer);
+    ImGui_ImplSDLRenderer3_Init(renderer);
+}
+#endif
+
+inline void imguiFree()
+{
+#ifdef GPU_IMPLEMENTATION
+    ImGui_ImplSDLGPU3_Shutdown();
+#else
+    ImGui_ImplSDLRenderer3_Shutdown();
+#endif
+    ImGui_ImplSDL3_Shutdown();
+    ImGui::DestroyContext();
+}
+#endif
+
 // Internal buffer management
 bool resizeBuffer(Window_t *w);
 void freeBuffer(Window_t *w);
@@ -109,6 +153,35 @@ bool updateFramebuffer(const Window_t *w);
 #endif
 
 #if defined(SDL_IMPLEMENTATION) && defined(IMGUI_IMPLEMENTATION)
+// ImGui helpers - automatically chooses backend based on GPU_IMPLEMENTATION
+#ifdef GPU_IMPLEMENTATION
+// ImGui + SDL + GPU: Use SDL_GPU3 ImGui backend
+inline void imguiNewFrame()
+{
+    ImGui_ImplSDLGPU3_NewFrame();
+    ImGui_ImplSDL3_NewFrame();
+    ImGui::NewFrame();
+}
+
+inline void imguiEndFrame(Window_t *w)
+{
+    (void)w;
+    ImGui::Render();
+}
+
+// Prepare ImGui draw data before render pass (copy vertex/index buffers)
+inline void imguiPrepareDrawData(SDL_GPUCommandBuffer *cmd)
+{
+    ImGui_ImplSDLGPU3_PrepareDrawData(ImGui::GetDrawData(), cmd);
+}
+
+// Render ImGui draw data in a render pass
+inline void imguiRenderDrawData(SDL_GPUCommandBuffer *cmd, SDL_GPURenderPass *pass)
+{
+    ImGui_ImplSDLGPU3_RenderDrawData(ImGui::GetDrawData(), cmd, pass);
+}
+#else
+// ImGui + SDL (no GPU): Use SDL_Renderer ImGui backend
 inline void imguiNewFrame()
 {
     ImGui_ImplSDLRenderer3_NewFrame();
@@ -121,9 +194,16 @@ inline void imguiEndFrame(Window_t *w)
     ImGui::Render();
     ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), w->renderer);
 }
+
+#define imguiPrepareDrawData(cmd) do { (void)(cmd); } while(0)
+#define imguiRenderDrawData(cmd, pass) do { (void)(cmd); (void)(pass); } while(0)
+#endif
 #else
+// No ImGui or no SDL
 #define imguiNewFrame() do {} while(0)
 #define imguiEndFrame(w) do {} while(0)
+#define imguiPrepareDrawData(cmd) do { (void)(cmd); } while(0)
+#define imguiRenderDrawData(cmd, pass) do { (void)(cmd); (void)(pass); } while(0)
 #endif
 
 #ifdef __cplusplus
@@ -257,13 +337,10 @@ inline bool createWindow(Window_t *w)
         return false;
     }
 
-#ifdef IMGUI_IMPLEMENTATION
-    IMGUI_CHECKVERSION();
-    ImGui::CreateContext();
-    ImGui::StyleColorsDark();
-    ImGui_ImplSDL3_InitForSDLRenderer(w->window, w->renderer);
-    ImGui_ImplSDLRenderer3_Init(w->renderer);
+#if defined(IMGUI_IMPLEMENTATION) && !defined(GPU_IMPLEMENTATION)
+    imguiInit(w->window, w->renderer);
 #endif
+    // Note: When GPU_IMPLEMENTATION is defined, call imguiInit() manually AFTER gpuInit()
 
     clock_gettime(CLOCK_MONOTONIC, &w->lastt);
     return true;
@@ -323,9 +400,7 @@ inline void destroyWindow(Window_t *w)
 {
 #ifdef SDL_IMPLEMENTATION
 #ifdef IMGUI_IMPLEMENTATION
-    ImGui_ImplSDLRenderer3_Shutdown();
-    ImGui_ImplSDL3_Shutdown();
-    ImGui::DestroyContext();
+    imguiFree();
 #endif
     if (w->renderer) {
         SDL_DestroyRenderer(w->renderer);

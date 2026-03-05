@@ -105,7 +105,7 @@ bool gpuRenderPipeline( Gpu *gpu, SDL_GPUGraphicsPipeline *pipeline, const void 
 #if defined(IMGUI_IMPLEMENTATION) && defined(SDL_IMPLEMENTATION)
 // Unified ImGui initialization - automatically chooses backend based on GPU_IMPLEMENTATION
 #ifdef GPU_IMPLEMENTATION
-inline void imguiInit(SDL_Window *window, SDL_GPUDevice *device, SDL_GPUTextureFormat color_target_format, SDL_GPUTextureMSAASamples msaa_samples)
+inline void imguiInit(SDL_Window *window, SDL_GPUDevice *device, SDL_GPUTextureFormat color_target_format)
 {
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -115,7 +115,7 @@ inline void imguiInit(SDL_Window *window, SDL_GPUDevice *device, SDL_GPUTextureF
     ImGui_ImplSDLGPU3_InitInfo info = {};
     info.Device = device;
     info.ColorTargetFormat = color_target_format;
-    info.MSAASamples = msaa_samples;
+    info.MSAASamples = SDL_GPU_SAMPLECOUNT_1;
     ImGui_ImplSDLGPU3_Init(&info);
 }
 #else

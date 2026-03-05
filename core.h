@@ -408,11 +408,6 @@ inline bool createWindow(Window_t *w)
         return false;
     }
 
-#if defined(IMGUI_IMPLEMENTATION) && !defined(GPU_IMPLEMENTATION)
-    imguiInit(w, w->renderer);
-#endif
-    // Note: When GPU_IMPLEMENTATION is defined, call imguiInit() manually AFTER gpuInit()
-
     clock_gettime(CLOCK_MONOTONIC, &w->lastt);
     return true;
 #else

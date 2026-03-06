@@ -188,6 +188,86 @@ bool gpuGetDrawableSize(const Gpu *gpu, int *out_width, int *out_height);
  *  gpuRenderPipeline(&gpu, pipeline, &uniforms, sizeof(uniforms), NULL, 0, 3);
  */
 bool gpuRenderPipeline(Gpu *gpu, SDL_GPUGraphicsPipeline *pipeline, const void *vertex_uniform_data, Uint32 vertex_uniform_size, const void *frag_uniform_data, Uint32 frag_uniform_size, Uint32 vertex_count);
+
+#if defined(IMGUI_IMPLEMENTATION) && defined(GPU_IMPLEMENTATION)
+// GPU render context for simplified rendering with ImGui integration
+typedef struct {
+    SDL_GPUCommandBuffer *cmd;
+    SDL_GPUTexture *swapchain;
+    Uint32 width, height;
+} GpuRenderPass;
+
+// Begin GPU render pass (acquires command buffer and swapchain)
+/*  -> Example:
+ *  GpuRenderPass pass;
+ *  if (!gpuBeginRender(&gpu, &pass)) return false;
+ *  if (!pass.swapchain) return true; // minimized
+ *  // ... render scene ...
+ */
+bool gpuBeginRender(Gpu *gpu, GpuRenderPass *pass);
+
+// Submit GPU render pass (submits command buffer)
+/*  -> Example:
+ *  gpuEndRender(&gpu, &pass);
+ */
+void gpuEndRender(Gpu *gpu, GpuRenderPass *pass);
+
+// Common render data passed to scene callbacks
+typedef struct {
+    float delta_time;       // Time since last frame
+    float total_time;       // Total elapsed time
+    Uint32 width, height;   // Swapchain dimensions
+    void *userdata;         // User-defined data
+} GpuRenderData;
+
+// Render scene with custom callback (handles swapchain, ImGui draw data, and command buffer)
+// NOTE: Call imguiNewFrame() and build your ImGui UI BEFORE calling gpuRenderFrame()
+/*  -> Example:
+ *  // In your render function:
+ *  imguiNewFrame();
+ *  ImGui::Begin("Window");
+ *  // ... build UI ...
+ *  ImGui::End();
+ *  ImGui::Render();
+ *  
+ *  // Setup render data:
+ *  GpuRenderData data = {};
+ *  data.delta_time = getDelta(&win);
+ *  data.total_time = ticks;
+ *  data.userdata = &my_custom_data;
+ *  
+ *  // Then render with GPU:
+ *  gpuRenderFrame(&gpu, render_scene, &data);
+ *  
+ *  // Scene callback:
+ *  void render_scene(Gpu *gpu, SDL_GPUCommandBuffer *cmd, SDL_GPURenderPass *pass, GpuRenderData *data) {
+ *      MyData *my = (MyData*)data->userdata;
+ *      SDL_BindGPUGraphicsPipeline(pass, my->pipeline);
+ *      SDL_DrawGPUPrimitives(pass, 3, 1, 0, 0);
+ *  }
+ */
+typedef void (*GpuRenderCallback)(Gpu *gpu, SDL_GPUCommandBuffer *cmd, SDL_GPURenderPass *pass, GpuRenderData *data);
+bool gpuRenderFrame(Gpu *gpu, GpuRenderCallback scene_callback, GpuRenderData *data);
+#else
+// Stubs for non-ImGui GPU mode
+typedef struct {
+    SDL_GPUCommandBuffer *cmd;
+    SDL_GPUTexture *swapchain;
+    Uint32 width, height;
+} GpuRenderPass;
+
+typedef struct {
+    float delta_time;
+    float total_time;
+    Uint32 width, height;
+    void *userdata;
+} GpuRenderData;
+
+inline bool gpuBeginRender(Gpu *gpu, GpuRenderPass *pass) { (void)gpu; (void)pass; return false; }
+inline void gpuEndRender(Gpu *gpu, GpuRenderPass *pass) { (void)gpu; (void)pass; }
+typedef void (*GpuRenderCallback)(Gpu *gpu, SDL_GPUCommandBuffer *cmd, SDL_GPURenderPass *pass, GpuRenderData *data);
+inline bool gpuRenderFrame(Gpu *gpu, GpuRenderCallback scene_callback, GpuRenderData *data) { (void)gpu; (void)scene_callback; (void)data; return false; }
+#endif
 #endif
 
 #if defined(IMGUI_IMPLEMENTATION) && defined(SDL_IMPLEMENTATION)
@@ -1071,6 +1151,81 @@ inline bool gpuRenderPipeline(
         return false;
     }
 
+    return true;
+}
+
+#if defined(IMGUI_IMPLEMENTATION) && defined(GPU_IMPLEMENTATION)
+inline bool gpuBeginRender(Gpu *gpu, GpuRenderPass *pass)
+{
+    if (!gpu || !gpu->device || !pass) return false;
+
+    pass->cmd = SDL_AcquireGPUCommandBuffer(gpu->device);
+    if (!pass->cmd) {
+        fprintf(stderr, "SDL_AcquireGPUCommandBuffer failed: %s\n", SDL_GetError());
+        return false;
+    }
+
+    pass->swapchain = NULL;
+    pass->width = 0;
+    pass->height = 0;
+    if (!SDL_WaitAndAcquireGPUSwapchainTexture(pass->cmd, gpu->window->window, &pass->swapchain, &pass->width, &pass->height)) {
+        SDL_CancelGPUCommandBuffer(pass->cmd);
+        return false;
+    }
+
+    if (!pass->swapchain) {
+        SDL_SubmitGPUCommandBuffer(pass->cmd);
+        return true;
+    }
+
+    return true;
+}
+
+inline void gpuEndRender(Gpu *gpu, GpuRenderPass *pass)
+{
+    if (!gpu || !pass || !pass->cmd) return;
+    SDL_SubmitGPUCommandBuffer(pass->cmd);
+}
+
+inline bool gpuRenderFrame(Gpu *gpu, GpuRenderCallback scene_callback, GpuRenderData *data)
+{
+    if (!gpu || !scene_callback || !data) return false;
+
+    GpuRenderPass pass;
+    if (!gpuBeginRender(gpu, &pass)) return false;
+    if (!pass.swapchain) return true;
+
+    data->width = pass.width;
+    data->height = pass.height;
+
+    imguiPrepareDrawData(pass.cmd);
+
+    // Scene pass (CLEAR)
+    {
+        SDL_GPUColorTargetInfo t = {};
+        t.texture     = pass.swapchain;
+        t.load_op     = SDL_GPU_LOADOP_CLEAR;
+        t.store_op    = SDL_GPU_STOREOP_STORE;
+        t.clear_color = {gpu->clear_r, gpu->clear_g, gpu->clear_b, gpu->clear_a};
+
+        SDL_GPURenderPass *render_pass = SDL_BeginGPURenderPass(pass.cmd, &t, 1, NULL);
+        scene_callback(gpu, pass.cmd, render_pass, data);
+        SDL_EndGPURenderPass(render_pass);
+    }
+
+    // ImGui pass (LOAD)
+    {
+        SDL_GPUColorTargetInfo t = {};
+        t.texture  = pass.swapchain;
+        t.load_op  = SDL_GPU_LOADOP_LOAD;
+        t.store_op = SDL_GPU_STOREOP_STORE;
+
+        SDL_GPURenderPass *render_pass = SDL_BeginGPURenderPass(pass.cmd, &t, 1, NULL);
+        imguiRenderDrawData(pass.cmd, render_pass);
+        SDL_EndGPURenderPass(render_pass);
+    }
+
+    gpuEndRender(gpu, &pass);
     return true;
 }
 #endif
@@ -2502,3 +2657,5 @@ inline void renderScene(Renderer* r, const Model* models, int count)
 
 #endif // RENDER3D_IMPLEMENTATION
 #endif // WRAPPER_RENDER3D_H
+#endif // WRAPPER_CORE_H
+

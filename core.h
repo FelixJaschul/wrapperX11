@@ -43,7 +43,7 @@ extern "C" {
 #endif
 #define LOG(x) do { fprintf(stderr, "%s\n", x); } while(0)
 
-typedef struct Window {
+typedef struct WindowHandle {
 #ifdef SDL_IMPLEMENTATION
     SDL_Window   *window;
     SDL_Renderer *renderer;

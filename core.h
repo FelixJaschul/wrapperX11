@@ -771,17 +771,25 @@ static inline bool _gpuLoadFileWithFallback(const char *path, Uint8 **data, size
 
     if (!base) return false;
 
+    bool found = false;
     SDL_snprintf(full, sizeof(full), "%s%s", base, path);
     *data = (Uint8*)SDL_LoadFile(full, size);
-    if (*data && *size > 0) return true;
+    if (*data && *size > 0) found = true;
+    else {
+        SDL_snprintf(rel, sizeof(rel), "%s../%s", base, path);
+        *data = (Uint8*)SDL_LoadFile(rel, size);
+        if (*data && *size > 0) found = true;
+        else {
+            SDL_snprintf(rel2, sizeof(rel2), "%s../../%s", base, path);
+            *data = (Uint8*)SDL_LoadFile(rel2, size);
+            if (*data && *size > 0) {
+                found = true;
+            }
+        }
+    }
 
-    SDL_snprintf(rel, sizeof(rel), "%s../%s", base, path);
-    *data = (Uint8*)SDL_LoadFile(rel, size);
-    if (*data && *size > 0) return true;
-
-    SDL_snprintf(rel2, sizeof(rel2), "%s../../%s", base, path);
-    *data = (Uint8*)SDL_LoadFile(rel2, size);
-    return (*data && *size > 0);
+    SDL_free((void*)base);
+    return found;
 }
 
 static inline bool _gpuLoadShaderForDevice(SDL_GPUDevice *device, const char *base_name, bool is_vertex, _gpuLoadedShader *out_shader)
@@ -2267,9 +2275,47 @@ inline void modelUpdate(const Model* models, const int count)
     }
 }
 
-inline void modelLoad(Model* m, const char* path)
+// Helper to open file with fallback paths
+static inline FILE* _modelOpenFileWithFallback(const char* path)
 {
     FILE* f = fopen(path, "r");
+    if (f) return f;
+
+    char buf[1024];
+
+#ifdef SDL_IMPLEMENTATION
+    const char* base = SDL_GetBasePath();
+    if (base) {
+        SDL_snprintf(buf, sizeof(buf), "%s%s", base, path);
+        f = fopen(buf, "r");
+        if (!f) {
+            SDL_snprintf(buf, sizeof(buf), "%s../%s", base, path);
+            f = fopen(buf, "r");
+        }
+        if (!f) {
+            SDL_snprintf(buf, sizeof(buf), "%s../../%s", base, path);
+            f = fopen(buf, "r");
+        }
+        SDL_free((void*)base);
+        if (f) return f;
+    }
+#endif
+
+    // Generic fallbacks (up to 2 levels)
+    snprintf(buf, sizeof(buf), "../%s", path);
+    f = fopen(buf, "r");
+    if (f) return f;
+
+    snprintf(buf, sizeof(buf), "../../%s", path);
+    f = fopen(buf, "r");
+    if (f) return f;
+
+    return NULL;
+}
+
+inline void modelLoad(Model* m, const char* path)
+{
+    FILE* f = _modelOpenFileWithFallback(path);
     if (!f) {
         fprintf(stderr, "Failed to open OBJ file: %s\n", path);
         return;

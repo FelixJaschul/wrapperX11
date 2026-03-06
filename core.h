@@ -70,6 +70,7 @@ typedef struct WindowHandle {
     size_t buffer_size;
     bool resized;
     bool vsync;
+    bool skip_renderer;
 } Window_t;
 
 typedef struct Camera Camera;
@@ -444,6 +445,7 @@ inline void windowInit(Window_t *w)
     w->buffer_size = 0;
     w->resized = false;
     w->vsync = false;
+    w->skip_renderer = false;
     clock_gettime(CLOCK_MONOTONIC, &w->lastt);
 }
 
@@ -468,16 +470,20 @@ inline bool createWindow(Window_t *w)
         return false;
     }
 
-    w->renderer = SDL_CreateRenderer(w->window, NULL);
-    if (!w->renderer) {
-        fprintf(stderr, "SDL_CreateRenderer failed: %s\n", SDL_GetError());
-        SDL_DestroyWindow(w->window);
-        w->window = NULL;
-        return false;
-    }
+    if (!w->skip_renderer) {
+        w->renderer = SDL_CreateRenderer(w->window, NULL);
+        if (!w->renderer) {
+            fprintf(stderr, "SDL_CreateRenderer failed: %s\n", SDL_GetError());
+            SDL_DestroyWindow(w->window);
+            w->window = NULL;
+            return false;
+        }
 
-    if (w->vsync) {
-        SDL_SetRenderVSync(w->renderer, 1);
+        if (w->vsync) {
+            SDL_SetRenderVSync(w->renderer, 1);
+        }
+    } else {
+        w->renderer = NULL;
     }
 
     if (!resizeBuffer(w)) {
@@ -611,12 +617,14 @@ inline void imguiInit(Window_t *w, SDL_Renderer *renderer)
 
 inline void imguiFree()
 {
+    if (ImGui::GetCurrentContext() == NULL) return;
+    ImGuiIO& io = ImGui::GetIO();
 #ifdef GPU_IMPLEMENTATION
-    ImGui_ImplSDLGPU3_Shutdown();
+    if (io.BackendRendererUserData) ImGui_ImplSDLGPU3_Shutdown();
 #else
-    ImGui_ImplSDLRenderer3_Shutdown();
+    if (io.BackendRendererUserData) ImGui_ImplSDLRenderer3_Shutdown();
 #endif
-    ImGui_ImplSDL3_Shutdown();
+    if (io.BackendPlatformUserData) ImGui_ImplSDL3_Shutdown();
     ImGui::DestroyContext();
 }
 
@@ -757,42 +765,38 @@ typedef struct {
     SDL_GPUShaderFormat format;
 } _gpuLoadedShader;
 
-static inline bool _gpuLoadFileWithFallback(const char *path, Uint8 **data, size_t *size)
+static inline bool _gpuLoadFileWithFallback(const char *path, const char *base, Uint8 **data, size_t *size)
 {
     if (!path || !data || !size) return false;
 
     *data = (Uint8*)SDL_LoadFile(path, size);
     if (*data && *size > 0) return true;
 
-    char full[1024];
-    char rel[1024];
-    char rel2[1024];
-    const char *base = SDL_GetBasePath();
-
     if (!base) return false;
 
     bool found = false;
+    char full[1024];
+
     SDL_snprintf(full, sizeof(full), "%s%s", base, path);
     *data = (Uint8*)SDL_LoadFile(full, size);
     if (*data && *size > 0) found = true;
     else {
-        SDL_snprintf(rel, sizeof(rel), "%s../%s", base, path);
-        *data = (Uint8*)SDL_LoadFile(rel, size);
+        SDL_snprintf(full, sizeof(full), "%s../%s", base, path);
+        *data = (Uint8*)SDL_LoadFile(full, size);
         if (*data && *size > 0) found = true;
         else {
-            SDL_snprintf(rel2, sizeof(rel2), "%s../../%s", base, path);
-            *data = (Uint8*)SDL_LoadFile(rel2, size);
+            SDL_snprintf(full, sizeof(full), "%s../../%s", base, path);
+            *data = (Uint8*)SDL_LoadFile(full, size);
             if (*data && *size > 0) {
                 found = true;
             }
         }
     }
 
-    SDL_free((void*)base);
     return found;
 }
 
-static inline bool _gpuLoadShaderForDevice(SDL_GPUDevice *device, const char *base_name, bool is_vertex, _gpuLoadedShader *out_shader)
+static inline bool _gpuLoadShaderForDevice(SDL_GPUDevice *device, const char *base_name, const char *base, bool is_vertex, _gpuLoadedShader *out_shader)
 {
     if (!device || !base_name || !out_shader) return false;
 
@@ -804,45 +808,50 @@ static inline bool _gpuLoadShaderForDevice(SDL_GPUDevice *device, const char *ba
     const char *stage = is_vertex ? "vert" : "frag";
     char path[256];
 
-    if (supported & SDL_GPU_SHADERFORMAT_SPIRV) {
+    bool found = false;
+
+    if (!found && (supported & SDL_GPU_SHADERFORMAT_SPIRV)) {
         SDL_snprintf(path, sizeof(path), "shaders/%s.%s.spv", base_name, stage);
-        if (_gpuLoadFileWithFallback(path, &out_shader->code, &out_shader->size)) {
+        if (_gpuLoadFileWithFallback(path, base, &out_shader->code, &out_shader->size)) {
             out_shader->format = SDL_GPU_SHADERFORMAT_SPIRV;
-            return true;
+            found = true;
         }
     }
-    if (supported & SDL_GPU_SHADERFORMAT_METALLIB) {
+    if (!found && (supported & SDL_GPU_SHADERFORMAT_METALLIB)) {
         SDL_snprintf(path, sizeof(path), "shaders/%s.%s.metallib", base_name, stage);
-        if (_gpuLoadFileWithFallback(path, &out_shader->code, &out_shader->size)) {
+        if (_gpuLoadFileWithFallback(path, base, &out_shader->code, &out_shader->size)) {
             out_shader->format = SDL_GPU_SHADERFORMAT_METALLIB;
-            return true;
+            found = true;
         }
     }
-    if (supported & SDL_GPU_SHADERFORMAT_MSL) {
+    if (!found && (supported & SDL_GPU_SHADERFORMAT_MSL)) {
         SDL_snprintf(path, sizeof(path), "shaders/%s.%s.msl", base_name, stage);
-        if (_gpuLoadFileWithFallback(path, &out_shader->code, &out_shader->size)) {
+        if (_gpuLoadFileWithFallback(path, base, &out_shader->code, &out_shader->size)) {
             out_shader->format = SDL_GPU_SHADERFORMAT_MSL;
-            return true;
+            found = true;
         }
     }
-    if (supported & SDL_GPU_SHADERFORMAT_DXIL) {
+    if (!found && (supported & SDL_GPU_SHADERFORMAT_DXIL)) {
         SDL_snprintf(path, sizeof(path), "shaders/%s.%s.dxil", base_name, stage);
-        if (_gpuLoadFileWithFallback(path, &out_shader->code, &out_shader->size)) {
+        if (_gpuLoadFileWithFallback(path, base, &out_shader->code, &out_shader->size)) {
             out_shader->format = SDL_GPU_SHADERFORMAT_DXIL;
-            return true;
+            found = true;
         }
     }
-    if (supported & SDL_GPU_SHADERFORMAT_DXBC) {
+    if (!found && (supported & SDL_GPU_SHADERFORMAT_DXBC)) {
         SDL_snprintf(path, sizeof(path), "shaders/%s.%s.dxbc", base_name, stage);
-        if (_gpuLoadFileWithFallback(path, &out_shader->code, &out_shader->size)) {
+        if (_gpuLoadFileWithFallback(path, base, &out_shader->code, &out_shader->size)) {
             out_shader->format = SDL_GPU_SHADERFORMAT_DXBC;
-            return true;
+            found = true;
         }
     }
 
-    fprintf(stderr, "No compatible shader found for '%s' stage '%s' (mask=0x%x)\n",
-            base_name, stage, (unsigned)supported);
-    return false;
+    if (!found) {
+        fprintf(stderr, "No compatible shader found for '%s' stage '%s' (mask=0x%x)\n",
+                base_name, stage, (unsigned)supported);
+    }
+
+    return found;
 }
 
 static inline SDL_GPUShader *_gpuCreateShaderWithEntrypointFallback(SDL_GPUDevice *device, SDL_GPUShaderCreateInfo *info)
@@ -883,11 +892,19 @@ static inline SDL_GPUGraphicsPipeline *_gpuCreatePipeline(
     memset(&vert_src, 0, sizeof(vert_src));
     memset(&frag_src, 0, sizeof(frag_src));
 
-    if (!_gpuLoadShaderForDevice(gpu->device, shader_base_name, true, &vert_src)) return NULL;
-    if (!_gpuLoadShaderForDevice(gpu->device, shader_base_name, false, &frag_src)) {
-        SDL_free(vert_src.code);
+    char *base = (char*)SDL_GetBasePath();
+
+    if (!_gpuLoadShaderForDevice(gpu->device, shader_base_name, base, true, &vert_src)) {
+        if (base) SDL_free(base);
         return NULL;
     }
+    if (!_gpuLoadShaderForDevice(gpu->device, shader_base_name, base, false, &frag_src)) {
+        SDL_free(vert_src.code);
+        if (base) SDL_free(base);
+        return NULL;
+    }
+
+    if (base) SDL_free(base);
 
     SDL_GPUShaderCreateInfo vinfo;
     SDL_GPUShaderCreateInfo finfo;
